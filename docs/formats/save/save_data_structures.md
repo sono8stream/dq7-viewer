@@ -62,7 +62,7 @@
 
 ## GameFlag
 
-ビットフィールドの詳細仕様は[gameflag_bitfield.md](gameflag_bitfield.md)を参照。
+ビットフィールドの詳細仕様は[gameflag_bitfield.md](../exefs/gameflag_bitfield.md)を参照。
 
 - ブロックヘッダ（16byte、ファイルオフセット`0x10`）: `FLAG`+version+size+予約
 - データ本体はヘッダ直後のファイルオフセット`0x20`から始まる

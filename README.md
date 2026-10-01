@@ -1,14 +1,19 @@
+[English](README.en.md)
+
 # DQ7 Viewer
 
 ニンテンドー3DS版『ドラゴンクエストVII エデンの戦士たち』のROMフォーマットを
-リバースエンジニアリングして作ったWebベースのビュアー・エディタです。
+解析して作ったWebベースのビュアー・エディタです。
+
+🚧 開発中です。粗い部分・未実装の機能があります。
 
 ## これは何か
 
 - `webapp/`: 抽出したRomFS/ExeFSのデータを閲覧・編集するためのローカルWebアプリ
   （Python標準ライブラリの`http.server`ベース、依存は最小限）
-- `docs/formats/`: リバースエンジニアリングで判明した、各種データ/バイナリ
-  フォーマットの構造仕様（オフセット・フィールド定義・アルゴリズム）
+- `docs/formats/`: 解析で判明した、各種データ/バイナリフォーマットの構造仕様
+  （オフセット・フィールド定義・アルゴリズム）。英語版は各ファイルと同じ
+  フォルダに`.en.md`として用意しています。
 
 ## これは何でないか
 
@@ -34,39 +39,60 @@ python3 server.py
 
 ## フォーマットドキュメント一覧
 
-`docs/formats/`配下の各ファイルが対象とする構造:
+`docs/formats/`配下はROMの主要な構成要素に対応するサブフォルダに分かれています。
+
+### `exefs/` — ExeFS(`.code`実行コード)内部構造
+
+| ファイル | 対象 |
+|---|---|
+| `exefs_master_structures.md` | ExeFS内フィールド/エンカウント関連構造 |
+| `exefs_symbol_recovery.md` | ExeFSの関数シンボル情報 |
+| `save_player_data_container.md` | PlayerDataContainerとNCCH/ExeFSコンテナ構造 |
+| `party_change_menu.md` | パーティ変更系メニューの内部構造 |
+| `scriptgroup_chapter_flags.md` | 章番号とイベントフラグの更新構造 |
+| `symbol_notes.md` | フィールドシンボル関連データの構造メモ |
+| `gameflag_bitfield.md` | GameFlagのビットフィールド構造 |
+
+### `save/` — セーブファイル構造
+
+| ファイル | 対象 |
+|---|---|
+| `save_data_structures.md` | セーブデータ全体構造 |
+| `play_time_field.md` | プレイ時間フィールド |
+| `player_party_layout.md` | パーティ関連メモリ/セーブ構造 |
+
+### `script/` — SCRIPTバイトコード
+
+| ファイル | 対象 |
+|---|---|
+| `script_opcodes.md` | SCRIPTファイル(イベントスクリプト)フォーマット |
+
+### `leveldata/` — `LEVELDATA/*.dat`系データテーブル
+
+| ファイル | 対象 |
+|---|---|
+| `camera_and_encounter_data.md` | フィールドカメラ・エンカウントデータ |
+| `character_status_data.md` | キャラクターステータス関連データファイル |
+| `character_identity.md` | モデル番号⇔キャラID対応 |
+| `partytalk_format.md` | partytalk系LEVELDATAファイルのフォーマット |
+| `map_code_naming.md` | マップファイルID⇔地名の対応構造 |
+| `mamono_master_classes.md` | モンスターがなつくシーケンスのバトルタスク構造 |
+| `debug_data_tables.md` | 開発者向けデバッグ関連データ |
+| `motion_index_manager.md` | モーション解決パイプライン |
+
+### `models/` — 3Dモデル・アニメーション・画像
 
 | ファイル | 対象 |
 |---|---|
 | `bcmdl_format.md` | 3DモデルフォーマットCGFX(BCRES) / `.bcmdl` |
 | `canm_format.md` | 骨格アニメーション(CANM)フォーマット |
-| `character_identity.md` | モデル番号⇔キャラID対応 |
 | `character_job_assets.md` | キャラクタービジュアルアセットの配置規則 |
-| `character_status_data.md` | キャラクターステータス関連データファイル |
-| `camera_and_encounter_data.md` | フィールドカメラ・エンカウントデータ |
-| `debug_data_tables.md` | 開発者向けデバッグ関連データ |
-| `exefs_master_structures.md` | ExeFS内フィールド/エンカウント関連構造 |
-| `exefs_symbol_recovery.md` | ExeFSの関数シンボル情報 |
 | `face_expression_textures.md` | 表情差分テクスチャの格納形式 |
-| `gameflag_bitfield.md` | GameFlagのビットフィールド構造 |
 | `image_containers.md` | 画像コンテナ形式(bctex/bcmdl/dmp/fpt) |
-| `mamono_master_classes.md` | モンスターがなつくシーケンスのバトルタスク構造 |
-| `map_code_naming.md` | マップファイルID⇔地名の対応構造 |
-| `motion_index_manager.md` | モーション解決パイプライン |
-| `party_change_menu.md` | パーティ変更系メニューの内部構造 |
-| `partytalk_format.md` | partytalk系LEVELDATAファイルのフォーマット |
-| `play_time_field.md` | プレイ時間フィールド |
-| `player_party_layout.md` | パーティ関連メモリ/セーブ構造 |
-| `save_data_structures.md` | セーブデータ全体構造 |
-| `save_player_data_container.md` | PlayerDataContainerとNCCH/ExeFSコンテナ構造 |
-| `script_opcodes.md` | SCRIPTファイル(イベントスクリプト)フォーマット |
-| `scriptgroup_chapter_flags.md` | 章番号とイベントフラグの更新構造 |
-| `symbol_notes.md` | フィールドシンボル関連データの構造メモ |
 
-## ライセンス・法的な位置づけについて
+## 注意点
 
-本リポジトリが公開するのは、リバースエンジニアリングによって判明したデータ
-構造に関する事実の記述と、それを閲覧するための自作ツールのソースコードのみです。
-ゲームの著作物（ROM本体、テキスト、画像、音声等）やその複製物は一切含みません。
-本ツールの利用にあたっては、自身が適法に所有するソフトウェアからのみデータを
-抽出してください。
+本リポジトリが公開するのは、解析によって判明したデータ構造に関する事実の記述と、
+それを閲覧するための自作ツールのソースコードのみです。ゲームの著作物（ROM本体、
+テキスト、画像、音声等）やその複製物は一切含みません。本ツールの利用にあたっては、
+自身が適法に所有するソフトウェアからのみデータを抽出してください。
