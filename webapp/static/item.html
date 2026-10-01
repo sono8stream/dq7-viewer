@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DQ7 Item Data Viewer</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  #itemList { flex: 1; min-width: 0; }
+  #itemList .it-row { display: flex; gap: 6px; align-items: baseline;
+    cursor: pointer; padding: 3px 4px; border-radius: 3px; font-size: 12.5px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #itemList .it-row:hover { background: var(--hover, rgba(127,127,127,.12)); }
+  #itemList .it-row.selected { background: var(--sel, rgba(90,140,220,.28)); }
+  #itemList .iid { color: var(--muted); min-width: 3.0em; text-align: right; font-family: var(--mono); }
+  #itemList .icat { color: var(--muted); font-size: 11px; min-width: 4.6em; }
+  #itemList .inm { overflow: hidden; text-overflow: ellipsis; }
+  #itemList .inm.noname { color: var(--muted); font-style: italic; }
+  .it-sub { font-size: 12px; color: var(--muted); margin: 2px 0 6px; white-space: normal; }
+  #detail table.kv2 { border-collapse: collapse; font-size: 12.5px; margin: 4px 0 10px; }
+  #detail table.kv2 th, #detail table.kv2 td { border: 1px solid var(--border, #4444); padding: 2px 7px; text-align: left; }
+  #detail table.kv2 th { color: var(--muted); font-weight: normal; white-space: nowrap; }
+  #detail table.kv2 td.v { font-family: var(--mono); }
+  #detail .sec { font-weight: bold; margin: 12px 0 3px; }
+  #detail .mono { font-family: var(--mono); white-space: pre-wrap; word-break: break-all; }
+  #detail .hint { color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>DQ7 Item Data Viewer</h1>
+  <nav>
+    <a href="index.html">スクリプト</a>
+    <a href="fpt.html">FPT</a>
+    <a href="floor.html">フロア</a>
+    <a href="encount.html">エンカウント</a>
+    <a href="item.html" class="current">アイテム</a>
+    <a href="character.html">キャラ</a>
+    <a href="model.html">モデル</a>
+    <a href="images.html">画像</a>
+    <a href="save.html">セーブ</a>
+    <a href="keifa_probe.html">キーファ調査</a>
+    <a href="jidx.html">jidx</a>
+  </nav>
+  <span class="kv" id="status"></span>
+</header>
+<div id="mobileTabs">
+  <button data-pane="itemList" class="active">アイテム一覧</button>
+  <button data-pane="detail">詳細</button>
+</div>
+<div id="layout">
+  <div class="pane mobile-active" id="itemList">
+    <input class="search-box" id="itemSearch" placeholder="番号 / 名前 / 分類 / effect_id で絞り込み...">
+    <div class="it-sub" id="itemSub"></div>
+    <div id="itemListInner"><div class="empty">読み込み中...</div></div>
+  </div>
+  <div class="pane" id="detail">
+    <div class="empty">アイテムを選択すると 52byte の全フィールドが表示されます</div>
+  </div>
+</div>
+<script src="item.js"></script>
+</body>
+</html>

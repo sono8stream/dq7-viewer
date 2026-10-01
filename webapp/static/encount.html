@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DQ7 Encount Data Viewer</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  #encList { flex: 1; min-width: 0; }
+  #encList .enc-row { display: flex; gap: 6px; align-items: baseline;
+    cursor: pointer; padding: 3px 4px; border-radius: 3px; font-size: 12.5px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #encList .enc-row:hover { background: var(--hover, rgba(127,127,127,.12)); }
+  #encList .enc-row.selected { background: var(--sel, rgba(90,140,220,.28)); }
+  #encList .eid { color: var(--muted); min-width: 3.0em; text-align: right; font-family: var(--mono); }
+  #encList .ezone { color: var(--muted); font-size: 11px; min-width: 5.2em; }
+  #encList .emons { overflow: hidden; text-overflow: ellipsis; }
+  #encList .badge { font-size: 10.5px; padding: 0 3px; border-radius: 3px; color: #fff; }
+  #encList .badge.sp { background: #a5642b; }
+  #encList .badge.em { background: #777; }
+  .enc-sub { font-size: 12px; color: var(--muted); margin: 2px 0 6px; white-space: normal; }
+  #detail table.wt { border-collapse: collapse; font-size: 12px; margin: 4px 0 10px; }
+  #detail table.wt th, #detail table.wt td { border: 1px solid var(--border, #4444); padding: 2px 6px; text-align: left; }
+  #detail table.wt td.w { text-align: right; font-family: var(--mono); }
+  #detail table.wt tr.metal td { color: #6bbf59; }
+  #detail .sec { font-weight: bold; margin: 12px 0 3px; }
+  #detail .mono { font-family: var(--mono); white-space: pre-wrap; word-break: break-all; }
+</style>
+</head>
+<body>
+<header>
+  <h1>DQ7 Encount Data Viewer</h1>
+  <nav>
+    <a href="index.html">スクリプト</a>
+    <a href="fpt.html">FPT</a>
+    <a href="floor.html">フロア</a>
+    <a href="encount.html" class="current">エンカウント</a>
+    <a href="item.html">アイテム</a>
+    <a href="character.html">キャラ</a>
+    <a href="model.html">モデル</a>
+    <a href="images.html">画像</a>
+    <a href="save.html">セーブ</a>
+    <a href="keifa_probe.html">キーファ調査</a>
+    <a href="jidx.html">jidx</a>
+  </nav>
+  <span class="kv" id="status"></span>
+</header>
+<div id="mobileTabs">
+  <button data-pane="encList" class="active">レコード一覧</button>
+  <button data-pane="detail">詳細</button>
+</div>
+<div id="layout">
+  <div class="pane mobile-active" id="encList">
+    <input class="search-box" id="encSearch" placeholder="番号 / モンスター名 / マップコード / zone で絞り込み...">
+    <div class="enc-sub" id="encSub"></div>
+    <div id="encListInner"><div class="empty">読み込み中...</div></div>
+  </div>
+  <div class="pane" id="detail">
+    <div class="empty">レコードを選択すると 56byte の全フィールドが表示されます</div>
+  </div>
+</div>
+<script src="encount.js"></script>
+</body>
+</html>

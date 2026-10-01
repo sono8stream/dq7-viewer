@@ -1,0 +1,410 @@
+:root {
+  --bg: #1e1e24;
+  --panel: #26262f;
+  --border: #3a3a46;
+  --text: #e6e6ea;
+  --muted: #8f8fa3;
+  --accent: #6ab0f3;
+  --accent-bg: #2a3f52;
+  --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+header {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+header h1 { font-size: 15px; margin: 0; font-weight: 600; }
+header nav a {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 13px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+}
+header nav a:hover { color: var(--text); }
+header nav a.current {
+  color: var(--accent);
+  border-color: var(--border);
+  background: var(--accent-bg);
+}
+select, input {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 13px;
+}
+#layout {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+.pane {
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+  padding: 6px;
+}
+#fileList { width: 220px; flex-shrink: 0; }
+#tree { width: 320px; flex-shrink: 0; }
+#detail { flex: 1; border-right: none; }
+.file-item, .tree-node summary, .cmd-item, .entry-item {
+  cursor: pointer;
+  padding: 3px 4px;
+  border-radius: 3px;
+  font-size: 12.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.file-item:hover, .cmd-item:hover, .entry-item:hover { background: var(--accent-bg); }
+.file-item.active { background: var(--accent-bg); color: var(--accent); }
+.file-meta { color: var(--muted); font-size: 11px; margin-left: 4px; }
+#tree > .file-meta button {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 11px;
+  flex: 0 0 auto;
+}
+#tree > .file-meta button:hover { background: var(--accent-bg); color: var(--accent); }
+#recentListWrap { border-bottom: 1px solid var(--border); padding-bottom: 6px; margin-bottom: 6px; }
+details.tree-node { margin-left: 10px; }
+details.tree-node > summary { list-style: none; }
+details.tree-node > summary::-webkit-details-marker { display: none; }
+details.tree-node > summary::before { content: '▸ '; color: var(--muted); }
+details.tree-node[open] > summary::before { content: '▾ '; }
+.tag-name { color: var(--accent); }
+.cmd-item.has-text { color: #9fd18a; }
+.cmd-item.selected, .entry-item.selected { background: var(--accent-bg); }
+.cmd-item.indent-item {
+  border-left-style: solid;
+  margin-bottom: 1px;
+}
+.cmd-item.indent-open {
+  border-top: 1px dashed var(--border);
+  margin-top: 3px;
+  padding-top: 4px;
+}
+.cmd-item.is-if {
+  font-style: italic;
+  color: #d9b36a;
+}
+.cmd-item.is-party {
+  font-weight: bold;
+  color: #7ad9c9;
+}
+.indent-badge {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  opacity: 0.85;
+  margin-right: 2px;
+}
+.entry-item.gap { color: #e0a05a; }
+.npc-placement {
+  color: #e0a05a;
+  font-size: 11px;
+  cursor: pointer;
+}
+.npc-placement:hover { text-decoration: underline; }
+.npc-field-item { color: #e0a05a; }
+#detail {
+  padding: 12px;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  white-space: pre-wrap;
+  /* word-break: break-all (removed 2026-08-28) forced a line break
+     between literally any two characters, including mid-English-word,
+     which looked broken on narrow phone screens for the prose
+     explanation text in command detail panels. overflow-wrap: anywhere
+     alone still prevents a long unbroken token (hex dumps, base64,
+     long identifiers) from overflowing - it only breaks mid-token when
+     there's no natural word boundary to break at instead. */
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+.kv { color: var(--muted); }
+.msgtext {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  font-family: system-ui, sans-serif;
+  font-size: 14px;
+}
+.empty { color: var(--muted); padding: 8px; }
+.search-box { width: 100%; margin-bottom: 4px; }
+
+/* --- command editor (script viewer edit mode) --- */
+.mode-btn {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.mode-btn.active {
+  background: var(--accent-bg);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.cmd-row { display: flex; align-items: center; gap: 2px; }
+.cmd-row .cmd-item { flex: 1; min-width: 0; }
+.cmd-edit-btn, .cmd-del-btn {
+  flex-shrink: 0;
+  background: transparent;
+  color: var(--muted);
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+.cmd-edit-btn:hover { color: var(--accent); background: var(--accent-bg); }
+.cmd-del-btn:hover { color: #e88080; background: rgba(232,128,128,0.15); }
+.cmd-insert-row {
+  height: 10px;
+  margin: 1px 0;
+  cursor: pointer;
+  position: relative;
+}
+.cmd-insert-row::before {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; top: 50%;
+  height: 1px;
+  background: transparent;
+}
+.cmd-insert-row:hover::before { background: var(--accent); }
+.cmd-insert-row:hover::after {
+  content: '+ ここに挿入';
+  position: absolute;
+  left: 8px; top: -8px;
+  font-size: 10px;
+  color: var(--accent);
+  background: var(--bg);
+  padding: 0 4px;
+}
+.edit-form { display: flex; flex-direction: column; gap: 8px; max-width: 480px; }
+.edit-form label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 2px; }
+.edit-form input, .edit-form select {
+  width: 100%;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 5px 7px;
+  font-family: var(--mono);
+  font-size: 13px;
+}
+/* Per-param type+value rows (added 2026-08-28, fixing a bug reported on
+   mobile): these live inside .edit-form, so the width:100% rule above
+   made the <select> greedily claim the whole row's width, leaving the
+   value <input> squeezed down to almost nothing - unusable on a narrow
+   phone screen. .param-type-select overrides width back to auto/fixed
+   and stops it from growing or shrinking; .param-value-input gets
+   min-width:0 so flex:1 can actually shrink it to fit instead of
+   overflowing the row (a flex item's default min-width is content-based,
+   which silently defeats flex-shrink for text inputs). Higher-specificity
+   selectors (.edit-form select.param-type-select) are used so this wins
+   over the .edit-form select/input rule above without !important. */
+.edit-form select.param-type-select,
+select.param-type-select {
+  width: auto;
+  flex: 0 0 auto;
+  min-width: 4.5em;
+}
+.edit-form input.param-value-input,
+input.param-value-input {
+  width: auto;
+  flex: 1 1 0;
+  min-width: 0;
+}
+.cmd-block {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  background: var(--panel);
+}
+.edit-form .form-row { display: flex; gap: 8px; }
+.edit-form .form-row > div { flex: 1; }
+.edit-form .form-actions { display: flex; gap: 8px; margin-top: 4px; }
+.edit-form button {
+  background: var(--accent-bg);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.edit-form button.secondary {
+  background: var(--panel);
+  color: var(--text);
+  border-color: var(--border);
+}
+.edit-form button.danger {
+  background: rgba(232,128,128,0.15);
+  color: #e88080;
+  border-color: #e88080;
+}
+/* group/object tree "add/copy object" buttons - deliberately rendered as
+   a block row below <summary>, not inline inside it (see app.js
+   renderTree comments): summary text uses white-space:nowrap +
+   text-overflow:ellipsis, so anything inline there risks being clipped
+   on narrow (~375px) mobile screens. A full-width block button below
+   avoids that and never fights for horizontal space with anything else. */
+.add-object-btn {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 4px 0 4px 10px;
+  padding: 5px 8px;
+  font-size: 12px;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+}
+.add-object-btn.danger {
+  background: rgba(232,128,128,0.15);
+  color: #e88080;
+  border-color: #e88080;
+}
+.edit-msg { font-size: 12px; margin-top: 6px; white-space: pre-wrap; }
+.edit-msg.error { color: #e88080; }
+.edit-msg.success { color: #9fd18a; }
+
+/* history panel's comment/result boxes - NOT inside .edit-form, so they
+   need their own width rule; without this they fell back to the browser's
+   tiny default input width, making any non-trivial comment look truncated
+   (reported by the user 2026-08-27). Switched from <input> to <textarea>
+   (2026-08-27) so long comments wrap and show in full instead of
+   scrolling sideways in a single line - grows with content up to ~10
+   lines (line-height 1.4em * 10), then scrolls vertically. */
+.history-input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 5px 7px;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  resize: vertical;
+  max-height: 14em;
+  overflow-y: auto;
+}
+
+#pendingBar, #selectionBar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  background: var(--accent-bg);
+  border-bottom: 1px solid var(--accent);
+  font-size: 13px;
+}
+#selectionBar { background: var(--panel); border-bottom-color: var(--border); }
+#pendingBarCount, #selectionBarCount { color: var(--accent); font-weight: 600; }
+#pendingBar button, #selectionBar button {
+  background: var(--accent-bg);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+#pendingBar button.secondary, #selectionBar button.secondary {
+  background: var(--panel);
+  color: var(--text);
+  border-color: var(--border);
+}
+#selectionBar button.danger {
+  background: rgba(232,128,128,0.15);
+  color: #e88080;
+  border-color: #e88080;
+}
+.cmd-select-checkbox { margin-right: 4px; flex-shrink: 0; }
+.cmd-insert-row.has-clipboard { background: rgba(154,209,138,0.08); }
+.cmd-insert-row .paste-btn {
+  display: none;
+  position: absolute;
+  right: 4px;
+  top: -8px;
+  font-size: 10px;
+  background: var(--accent-bg);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 1px 6px;
+  cursor: pointer;
+}
+.cmd-insert-row.has-clipboard .paste-btn { display: inline-block; }
+
+/* --- mobile tab navigation (hidden on wide screens) --- */
+#mobileTabs {
+  display: none;
+  padding: 6px 8px;
+  gap: 6px;
+  border-bottom: 1px solid var(--border);
+}
+#mobileTabs button {
+  flex: 1;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 4px;
+  font-size: 13px;
+}
+#mobileTabs button.active {
+  background: var(--accent-bg);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+@media (max-width: 760px) {
+  #mobileTabs { display: flex; }
+  #layout { display: block; overflow: hidden; height: 100%; }
+  .pane {
+    display: none;
+    width: 100% !important;
+    height: 100%;
+    border-right: none;
+  }
+  .pane.mobile-active { display: block; }
+  #detail { font-size: 13px; }
+}

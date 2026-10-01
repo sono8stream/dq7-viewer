@@ -1,0 +1,13 @@
+{
+  "name": "dq7-viewer-webapp",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Node-side test helpers for the DQ7 webapp (3D model viewer render check)",
+  "scripts": {
+    "test:model": "node test_model_render.mjs"
+  },
+  "devDependencies": {
+    "three": "0.167.0"
+  }
+}

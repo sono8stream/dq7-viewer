@@ -1,0 +1,83 @@
+#jidxLayout {
+  padding: 16px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.jidx-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.jidx-hint {
+  color: #666;
+  font-size: 0.9em;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.jidx-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.jidx-meta {
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: #f0f0f0;
+  font-family: monospace;
+  font-size: 0.85em;
+  white-space: pre-wrap;
+}
+
+.jidx-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: monospace;
+  font-size: 0.9em;
+}
+
+.jidx-table th,
+.jidx-table td {
+  border: 1px solid #ddd;
+  padding: 4px 8px;
+  text-align: right;
+}
+
+.jidx-table th:first-child,
+.jidx-table td:first-child {
+  text-align: left;
+}
+
+.jidx-table tr.jidx-highlight {
+  background: #fff8d8;
+}
+
+.jidx-link {
+  color: #0645ad;
+  text-decoration: underline;
+  cursor: pointer;
+  background: none;
+  border: none;
+  font: inherit;
+  padding: 0;
+}
+
+@media (max-width: 760px) {
+  #jidxLayout {
+    padding: 10px;
+  }
+  .jidx-table {
+    display: block;
+    overflow-x: auto;
+    font-size: 0.8em;
+  }
+  .jidx-row input,
+  .jidx-row select {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+}

@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DQ7 Character Stats Viewer</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  #charList { flex: 0 0 auto; min-width: 0; }
+  #charList .ch-row { display: flex; gap: 8px; align-items: baseline; cursor: pointer;
+    padding: 6px 8px; border-radius: 4px; font-size: 13px; white-space: nowrap; }
+  #charList .ch-row:hover { background: var(--hover, rgba(127,127,127,.12)); }
+  #charList .ch-row.selected { background: var(--sel, rgba(90,140,220,.28)); }
+  #charList .cslot { color: var(--muted); font-family: var(--mono); }
+  .ch-sub { font-size: 12px; color: var(--muted); margin: 2px 0 8px; white-space: normal; }
+  #detail { overflow: auto; }
+  #detail table.stat { border-collapse: collapse; font-size: 12px; }
+  #detail table.stat th, #detail table.stat td { border: 1px solid var(--border, #4444);
+    padding: 2px 7px; text-align: right; font-variant-numeric: tabular-nums; }
+  #detail table.stat th { position: sticky; top: 0; background: var(--bg, #222);
+    color: var(--muted); font-weight: normal; }
+  #detail table.stat td.lv { color: var(--muted); font-family: var(--mono); }
+  #detail table.stat tr:hover td { background: var(--hover, rgba(127,127,127,.10)); }
+  #detail .sec { font-weight: bold; margin: 10px 0 4px; }
+  #detail .hint { color: var(--muted); font-size: 12px; margin-top: 8px; }
+  #detail .up { color: #6bbf59; font-size: 10.5px; }
+  #datasetTabs { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 8px;
+    border-bottom: 1px solid var(--border); }
+  #datasetTabs button { flex: 1 1 auto; min-width: 90px; background: var(--panel);
+    color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+    padding: 6px 4px; font-size: 12.5px; }
+  #datasetTabs button.active { background: var(--accent-bg); color: var(--accent);
+    border-color: var(--accent); }
+  #detail table.rawtable { border-collapse: collapse; font-size: 11.5px; }
+  #detail table.rawtable th, #detail table.rawtable td { border: 1px solid var(--border, #4444);
+    padding: 2px 6px; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  #detail table.rawtable th { position: sticky; top: 0; background: var(--bg, #222);
+    color: var(--muted); font-weight: normal; }
+  #detail table.rawtable td.txt { text-align: left; font-family: var(--mono); }
+</style>
+</head>
+<body>
+<header>
+  <h1>DQ7 Character Stats Viewer</h1>
+  <nav>
+    <a href="index.html">スクリプト</a>
+    <a href="fpt.html">FPT</a>
+    <a href="floor.html">フロア</a>
+    <a href="encount.html">エンカウント</a>
+    <a href="item.html">アイテム</a>
+    <a href="character.html" class="current">キャラ</a>
+    <a href="model.html">モデル</a>
+    <a href="images.html">画像</a>
+    <a href="save.html">セーブ</a>
+    <a href="keifa_probe.html">キーファ調査</a>
+    <a href="jidx.html">jidx</a>
+  </nav>
+  <span class="kv" id="status"></span>
+</header>
+<div id="datasetTabs">
+  <button data-ds="player_stats" class="active">成長表(LvN)</button>
+  <button data-ds="character_init_data">初期化データ</button>
+  <button data-ds="chara_list">モデル寸法(全NPC)</button>
+</div>
+<div id="mobileTabs">
+  <button data-pane="charList" class="active">キャラ選択</button>
+  <button data-pane="detail">詳細</button>
+</div>
+<div id="layout">
+  <div class="pane mobile-active" id="charList">
+    <div class="ch-sub" id="charSub"></div>
+    <div id="charListInner"><div class="empty">読み込み中...</div></div>
+  </div>
+  <div class="pane" id="detail">
+    <div class="empty">キャラを選ぶとレベル1〜99の成長表が出ます</div>
+  </div>
+</div>
+<script src="character.js"></script>
+</body>
+</html>

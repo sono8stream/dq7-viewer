@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DQ7 FPT Viewer</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>DQ7 FPT Viewer</h1>
+  <nav>
+    <a href="index.html">スクリプト</a>
+    <a href="fpt.html" class="current">FPT</a>
+    <a href="floor.html">フロア</a>
+    <a href="encount.html">エンカウント</a>
+    <a href="item.html">アイテム</a>
+    <a href="character.html">キャラ</a>
+    <a href="model.html">モデル</a>
+    <a href="images.html">画像</a>
+    <a href="save.html">セーブ</a>
+    <a href="keifa_probe.html">キーファ調査</a>
+    <a href="jidx.html">jidx</a>
+  </nav>
+  <span class="kv" id="status"></span>
+</header>
+<div id="mobileTabs">
+  <button data-pane="fileList" class="active">ファイル</button>
+  <button data-pane="tree">エントリ</button>
+  <button data-pane="detail">詳細</button>
+</div>
+<div id="layout">
+  <div class="pane mobile-active" id="fileList">
+    <input class="search-box" id="fileSearch" placeholder="ファイル名で絞り込み...">
+    <div id="fileListInner"></div>
+  </div>
+  <div class="pane" id="tree">
+    <div class="empty">左から.fptファイルを選択してください</div>
+  </div>
+  <div class="pane" id="detail">
+    <div class="empty">エントリを選択すると詳細が表示されます</div>
+  </div>
+</div>
+<script src="fpt.js"></script>
+</body>
+</html>

@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DQ7 3D Model Viewer</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  #modelLayout { display: flex; flex: 1; min-height: 0; }
+  #mfileList { width: 240px; flex-shrink: 0; overflow-y: auto; border-right: 1px solid var(--border); padding: 6px; }
+  #mviewport { flex: 1; min-width: 0; position: relative; background: #0d0f17; }
+  #mcanvas { display: block; width: 100%; height: 100%; }
+  #minfo { width: 270px; flex-shrink: 0; overflow-y: auto; border-left: 1px solid var(--border);
+           padding: 8px; font-family: var(--mono); font-size: 11.5px; white-space: pre-wrap;
+           overflow-wrap: anywhere; line-height: 1.45; }
+  #mstatus { position: absolute; left: 10px; top: 10px; background: rgba(0,0,0,.6);
+             color: #cfe; font-size: 12px; padding: 4px 8px; border-radius: 4px; pointer-events: none; }
+  /* Two stacked rows (view toggles / animation controls) instead of one
+     long wrapping row - a single row's wrap point shifts with window width
+     in a way that could put the anim <select> right where #mhint sits at
+     bottom-right, visually overlapping it. Stacking removes that: each row
+     wraps independently and the whole block still grows upward from its
+     bottom:10 anchor. max-width additionally keeps either row from ever
+     reaching under #mhint's reserved right-hand strip. */
+  #mtoolbar { position: absolute; left: 10px; bottom: 10px; display: flex;
+              flex-direction: column; gap: 6px; max-width: calc(100% - 190px); }
+  #mtoolbar .toolbar-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  #mtoolbar button { font-size: 11.5px; padding: 3px 8px; }
+  #animSelect { font-size: 11.5px; padding: 3px 6px; flex: 1 1 auto; min-width: 0; max-width: 100%; }
+  #mtoolbar button.active { background: #3a6ea5; color: #fff; border-color: #3a6ea5; }
+  #minfo img { display: block; }
+  #mhint { position: absolute; right: 10px; bottom: 10px; color: var(--muted); font-size: 11px; }
+  .mfile-dir > summary { cursor: pointer; padding: 4px 2px; font-size: 12px; color: var(--muted);
+                         text-transform: uppercase; letter-spacing: .5px; }
+  .mfile-row { padding: 3px 6px; border-radius: 3px; cursor: pointer; font-size: 12px;
+               white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mfile-row:hover { background: var(--hover, rgba(127,127,127,.12)); }
+  .mfile-row.selected { background: var(--sel, rgba(90,140,220,.28)); }
+  .mfile-row .kind { font-size: 10px; color: var(--muted); margin-left: 4px; }
+  @media (max-width: 760px) {
+    #modelLayout { display: block; height: 100%; }
+    #mfileList, #mviewport, #minfo { display: none; width: 100% !important; height: 100%; border: none; }
+    #mfileList.mobile-active, #mviewport.mobile-active, #minfo.mobile-active { display: block; }
+    #mviewport.mobile-active { display: block; }
+    /* マウスドラッグ/ホイール前提のヒントなので触操作のモバイルでは無意味 -
+       非表示にしてツールバーの縦積みぶんの高さと被らないようにする */
+    #mhint { display: none; }
+    #mtoolbar { max-width: calc(100% - 20px); }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>DQ7 3D Model Viewer</h1>
+  <nav>
+    <a href="index.html">スクリプト</a>
+    <a href="fpt.html">FPT</a>
+    <a href="floor.html">フロア</a>
+    <a href="encount.html">エンカウント</a>
+    <a href="item.html">アイテム</a>
+    <a href="character.html">キャラ</a>
+    <a href="model.html" class="current">モデル</a>
+    <a href="images.html">画像</a>
+    <a href="save.html">セーブ</a>
+    <a href="keifa_probe.html">キーファ調査</a>
+    <a href="jidx.html">jidx</a>
+  </nav>
+  <span class="kv" id="status"></span>
+</header>
+<div id="mobileTabs">
+  <button data-pane="mfileList" class="active">ファイル</button>
+  <button data-pane="mviewport">3D</button>
+  <button data-pane="minfo">情報</button>
+</div>
+<div id="modelLayout">
+  <div class="pane mobile-active" id="mfileList">
+    <input class="search-box" id="mfileSearch" placeholder="モデル名で絞り込み...">
+    <div id="mfileListInner"><div class="empty">読み込み中...</div></div>
+  </div>
+  <div class="pane" id="mviewport">
+    <canvas id="mcanvas"></canvas>
+    <div id="mstatus">Three.js 読み込み中...</div>
+    <div id="mtoolbar">
+      <div class="toolbar-row">
+        <button id="btnTex" class="active">テクスチャ</button>
+        <button id="btnLayers" class="active">重ねテクスチャ</button>
+        <button id="btnWire">ワイヤーフレーム</button>
+        <button id="btnNormals">法線カラー</button>
+        <button id="btnBones">ボーン</button>
+        <button id="btnReset">視点リセット</button>
+      </div>
+      <div class="toolbar-row">
+        <select id="animSelect" disabled></select>
+        <button id="btnPlay" disabled>再生</button>
+      </div>
+      <div class="toolbar-row">
+        <button id="btnPrevModel" disabled>← 前のモデル</button>
+        <button id="btnNextModel" disabled>次のモデル →</button>
+      </div>
+    </div>
+    <div id="mhint">左ドラッグ:回転 / ホイール:ズーム / 右ドラッグ:移動</div>
+  </div>
+  <div class="pane" id="minfo"><div class="empty">モデルを選択してください</div></div>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.167.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.167.0/examples/jsm/"
+} }
+</script>
+<script type="module" src="model.js"></script>
+<script>
+  // Surface a hard failure of the ES-module load (e.g. Three.js CDN
+  // unreachable from the browser): model.js never runs, so nothing else
+  // would tell the user why the 3D pane is blank.
+  window.addEventListener('error', (e) => {
+    if (e.filename && /three|model\.js/.test(e.filename)) {
+      const s = document.getElementById('mstatus');
+      if (s) s.textContent = 'スクリプト読み込み失敗: ' + (e.message || e.filename);
+    }
+  }, true);
+  setTimeout(() => {
+    if (!window.__modelViewerReady) {
+      const s = document.getElementById('mstatus');
+      if (s && /読み込み中/.test(s.textContent))
+        s.textContent = 'Three.js を読み込めませんでした（CDN 到達不可 or ブロック）。コンソールを確認してください。';
+    }
+  }, 6000);
+</script>
+</body>
+</html>

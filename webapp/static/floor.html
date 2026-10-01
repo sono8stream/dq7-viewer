@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DQ7 Floor / Map Viewer</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  /* wider list than the 220px #fileList used by the other viewers -
+     the floor table carries id / mapcode / group / warp counts. */
+  #floorList { flex: 1; min-width: 0; }
+  #floorList .floor-row { display: flex; gap: 6px; align-items: baseline;
+    cursor: pointer; padding: 3px 4px; border-radius: 3px; font-size: 12.5px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #floorList .floor-row:hover { background: var(--hover, rgba(127,127,127,.12)); }
+  #floorList .floor-row.selected { background: var(--sel, rgba(90,140,220,.28)); }
+  #floorList .fid { color: var(--muted); min-width: 3.4em; text-align: right; }
+  #floorList .mc { font-family: var(--mono); }
+  #floorList .no-mc { color: var(--muted); font-style: italic; }
+  #floorList .badge { font-size: 11px; color: var(--muted); }
+  #floorList .badge.has { color: #6bbf59; }
+  #floorList .grp { font-size: 11px; color: var(--muted); }
+  .floor-sub { font-size: 12px; color: var(--muted); margin: 2px 0 6px; white-space: normal; }
+</style>
+</head>
+<body>
+<header>
+  <h1>DQ7 Floor / Map Viewer</h1>
+  <nav>
+    <a href="index.html">スクリプト</a>
+    <a href="fpt.html">FPT</a>
+    <a href="floor.html" class="current">フロア</a>
+    <a href="encount.html">エンカウント</a>
+    <a href="item.html">アイテム</a>
+    <a href="character.html">キャラ</a>
+    <a href="model.html">モデル</a>
+    <a href="images.html">画像</a>
+    <a href="save.html">セーブ</a>
+    <a href="keifa_probe.html">キーファ調査</a>
+    <a href="jidx.html">jidx</a>
+  </nav>
+  <span class="kv" id="status"></span>
+</header>
+<div id="mobileTabs">
+  <button data-pane="floorList" class="active">フロア一覧</button>
+  <button data-pane="detail">詳細</button>
+</div>
+<div id="layout">
+  <div class="pane mobile-active" id="floorList">
+    <input class="search-box" id="floorSearch" placeholder="フロアID / マップコード / group で絞り込み...">
+    <div class="floor-sub" id="floorSub"></div>
+    <div id="floorListInner"><div class="empty">読み込み中...</div></div>
+  </div>
+  <div class="pane" id="detail">
+    <div class="empty">フロアを選択すると、対応ファイルと出入りのワープ一覧が表示されます</div>
+  </div>
+</div>
+<script src="floor.js"></script>
+</body>
+</html>

@@ -1,0 +1,76 @@
+#probeLayout {
+  padding: 16px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.probe-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.probe-hint {
+  color: #666;
+  font-size: 0.9em;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.probe-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.probe-status {
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: #f0f0f0;
+  font-family: monospace;
+  font-size: 0.9em;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.probe-status.ok {
+  background: #e6f6e6;
+}
+
+.probe-status.error {
+  background: #fbe6e6;
+}
+
+.probe-log-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: monospace;
+  font-size: 0.9em;
+}
+
+.probe-log-table th,
+.probe-log-table td {
+  border: 1px solid #ddd;
+  padding: 4px 8px;
+  text-align: left;
+}
+
+.probe-log-table tr.probe-row-new {
+  background: #fff8d8;
+}
+
+@media (max-width: 760px) {
+  #probeLayout {
+    padding: 10px;
+  }
+  .probe-log-table {
+    display: block;
+    overflow-x: auto;
+    font-size: 0.8em;
+  }
+  .probe-row button {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+}
