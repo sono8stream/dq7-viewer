@@ -34,20 +34,149 @@ const rawByteWriteBtn = document.getElementById('rawByteWriteBtn');
 const pendingRawEditsEl = document.getElementById('pendingRawEdits');
 const flagsHexDumpEl = document.getElementById('flagsHexDump');
 
-const SCALAR_LABELS = {
-  gold: '所持金', bank: '銀行', casino: 'カジノコイン', medal_bank: 'メダル預り',
-  small_medal: 'しょうメダル', max_damage: '最大ダメージ記録', all_gold: '稼いだ総額',
-};
+DQ7I18N.extend({
+  ja: {
+    'save.openTitle': 'セーブファイルを開く',
+    'save.modeUpload': '端末から選択',
+    'save.modePath': 'サーバー上のパスを指定',
+    'save.uploadHint': 'ファイル閲覧アプリ（Files等）から直接セーブファイルを選択します。'
+      + '編集後は「ダウンロード」ボタンで編集済みファイルを端末に保存し、ファイルマネージャで元のファイルに上書きしてください'
+      + '（ブラウザからは元の場所への直接書き込みができないため）。',
+    'save.pathHint': 'このWebサーバーが動いている端末上のセーブファイルへの絶対パスを指定してください。'
+      + '書き込み前に自動で <code>&lt;セーブと同じフォルダ&gt;/dq7_save_backup/</code> にバックアップを作成します。',
+    'save.browse': 'フォルダを参照...',
+    'save.open': '開く',
+    'save.browserUp': '↑ 上へ',
+    'save.browserClose': '閉じる',
+    'save.write': '保存',
+    'save.scalarsTitle': '所持金など',
+    'save.partyTitle': 'Party（隊列, 0x0510+i*4 - 現在の並び順に入っているキャラID）',
+    'save.charactorsTitle': 'Charactors（キャラ別ステータス固定枠, 0x0C80+i*STRIDE）',
+    'save.rawTitle': '生バイト/フラグ（実験的 - 地点名・イベントフラグの対応は未解明）',
+    'save.rawHint': '0x0020〜0x0510の生バイト領域。ルーラ解禁地点(Place.Visit、id/8バイト目のid%8ビット)を含む'
+      + '何らかのフラグ配列と推定されるが、地点ID→名前の対応表は入手できていない。ビット/バイト単位で'
+      + '直接編集し、実機で挙動を確認する探索用ツール。オフセットは16進数で入力してください（<code>0x</code>省略可）。',
+    'save.placeIdPlaceholder': 'Place ID (例: 5)',
+    'save.placeIdToggle': 'トグルを予約',
+    'save.rawBitOffsetPlaceholder': 'offset (hex, 例: 20)',
+    'save.rawBitToggle': 'ビットをトグル予約',
+    'save.rawByteHexPlaceholder': '新しいバイト列(hex) 例: deadbeef',
+    'save.rawByteWrite': 'バイト書き込みを予約',
+    'save.hexDumpLabel': 'flags_region の現在のhexダンプ（予約中の変更を反映済み、offsetは絶対値）:',
+    'save.gold': '所持金', 'save.bank': '銀行', 'save.casino': 'カジノコイン',
+    'save.medal_bank': 'メダル預り', 'save.small_medal': 'しょうメダル',
+    'save.max_damage': '最大ダメージ記録', 'save.all_gold': '稼いだ総額',
+    'save.playTime': '冒険した時間',
+    'save.hours': '時間', 'save.minutes': '分',
+    'save.lv': 'Lv', 'save.hp': 'HP', 'save.max_hp': 'maxHP', 'save.mp': 'MP', 'save.max_mp': 'maxMP',
+    'save.power': '力', 'save.defense': '守備力', 'save.speed': '素早さ', 'save.intelligence': '賢さ',
+    'save.cool': 'かっこよさ', 'save.exp': '経験値', 'save.job': '職業ID',
+    'save.name': '名前',
+    'save.slot': 'スロット',
+    'save.current': '現在',
+    'save.empty': '(空き / 0)',
+    'save.notInCatalog': '(カタログ外)',
+    'save.checksumOk': 'checksum OK',
+    'save.checksumBad': 'checksum不一致 (stored={stored}, computed={computed}) - 別デバイス種別かも',
+    'save.outOfRange': '(範囲外)',
+    'save.cancel': '取消',
+    'save.emptyFolder': '(空のフォルダ)',
+    'save.loading': '読み込み中...',
+    'save.uploading': 'をアップロード中...',
+    'save.timeout': 'タイムアウトしました（30秒）。ファイルが大きすぎるか、サーバーに接続できていません。',
+    'save.writing': '書き込み中...',
+    'save.wrote': '保存しました (backup: {backup})',
+    'save.downloaded': 'ダウンロードしました ({name}) - ファイルマネージャで元のファイルに上書きしてください',
+    'save.bitBadRange': 'bitは0-7で指定してください',
+    'save.outOfFlagsRange': 'flags_region の範囲外のoffsetです',
+    'save.hexInputHint': '16進数のバイト列を入力してください（例: deadbeef）',
+    'save.baseOffsetHint': 'base offset = 0x{offset}  |  この枠は「隊列内の並び順」ではなく、キャラ固有の固定ステータス枠（推定: id={id}想定、未検証）です。',
+  },
+  en: {
+    'save.openTitle': 'Open a Save File',
+    'save.modeUpload': 'Choose from device',
+    'save.modePath': 'Specify a server-side path',
+    'save.uploadHint': 'Pick a save file directly from a file browser app (Files, etc). '
+      + 'After editing, use the "Download" button to save the edited file to your device, '
+      + 'then overwrite the original with it using a file manager '
+      + '(the browser cannot write directly back to the original location).',
+    'save.pathHint': 'Enter the absolute path to the save file on the device running this web server. '
+      + 'A backup is automatically created at <code>&lt;save folder&gt;/dq7_save_backup/</code> before writing.',
+    'save.browse': 'Browse folder...',
+    'save.open': 'Open',
+    'save.browserUp': '↑ Up',
+    'save.browserClose': 'Close',
+    'save.write': 'Save',
+    'save.scalarsTitle': 'Gold, etc.',
+    'save.partyTitle': 'Party (formation, 0x0510+i*4 - character ID currently in this slot)',
+    'save.charactorsTitle': 'Charactors (per-character fixed status slots, 0x0C80+i*STRIDE)',
+    'save.rawTitle': 'Raw bytes/flags (experimental - place name / event flag mapping unresolved)',
+    'save.rawHint': 'The raw byte region 0x0020-0x0510. Presumed to be some kind of flag array including '
+      + 'the Zoom-unlocked places (Place.Visit, bit id%8 of byte id/8), but no place-ID-to-name table has '
+      + 'been obtained. An exploratory tool for editing bits/bytes directly and checking the effect on '
+      + 'real hardware. Enter offsets in hex (the <code>0x</code> prefix is optional).',
+    'save.placeIdPlaceholder': 'Place ID (e.g. 5)',
+    'save.placeIdToggle': 'Queue toggle',
+    'save.rawBitOffsetPlaceholder': 'offset (hex, e.g. 20)',
+    'save.rawBitToggle': 'Queue bit toggle',
+    'save.rawByteHexPlaceholder': 'New byte sequence (hex), e.g. deadbeef',
+    'save.rawByteWrite': 'Queue byte write',
+    'save.hexDumpLabel': 'Current hex dump of flags_region (reflects queued edits, offsets are absolute):',
+    'save.gold': 'Gold', 'save.bank': 'Bank', 'save.casino': 'Casino Coins',
+    'save.medal_bank': 'Medal Deposit', 'save.small_medal': 'Small Medals',
+    'save.max_damage': 'Max Damage Record', 'save.all_gold': 'Total Gold Earned',
+    'save.playTime': 'Play Time',
+    'save.hours': 'h', 'save.minutes': 'm',
+    'save.lv': 'Lv', 'save.hp': 'HP', 'save.max_hp': 'maxHP', 'save.mp': 'MP', 'save.max_mp': 'maxMP',
+    'save.power': 'Attack', 'save.defense': 'Defense', 'save.speed': 'Agility', 'save.intelligence': 'Wisdom',
+    'save.cool': 'Style', 'save.exp': 'EXP', 'save.job': 'Job ID',
+    'save.name': 'Name',
+    'save.slot': 'Slot',
+    'save.current': 'current',
+    'save.empty': '(empty / 0)',
+    'save.notInCatalog': '(not in catalog)',
+    'save.checksumOk': 'checksum OK',
+    'save.checksumBad': 'checksum mismatch (stored={stored}, computed={computed}) - possibly a different device type',
+    'save.outOfRange': '(out of range)',
+    'save.cancel': 'Remove',
+    'save.emptyFolder': '(empty folder)',
+    'save.loading': 'Loading...',
+    'save.uploading': ': uploading...',
+    'save.timeout': 'Timed out (30s). The file may be too large, or the server is unreachable.',
+    'save.writing': 'Writing...',
+    'save.wrote': 'Saved (backup: {backup})',
+    'save.downloaded': 'Downloaded ({name}) - please overwrite the original file with this using a file manager',
+    'save.bitBadRange': 'Please specify a bit between 0 and 7',
+    'save.outOfFlagsRange': 'This offset is outside the flags_region range',
+    'save.hexInputHint': 'Please enter a hex byte sequence (e.g. deadbeef)',
+    'save.baseOffsetHint': 'base offset = 0x{offset}  |  This slot is not "position within the formation" but a '
+      + 'character-specific fixed status slot (presumed id={id}, unverified).',
+  },
+});
+
+function SL(name) { return DQ7I18N.t('save.' + name); }
+
+// 言語切替のたびに再評価されるよう、固定オブジェクトではなく関数にする。
+function scalarLabels() {
+  return {
+    gold: SL('gold'), bank: SL('bank'), casino: SL('casino'), medal_bank: SL('medal_bank'),
+    small_medal: SL('small_medal'), max_damage: SL('max_damage'), all_gold: SL('all_gold'),
+  };
+}
 
 // +0x3250, 30fpsのフレームカウンタ。save_editor.py PLAY_TIME_OFFSET参照。
 const PLAY_TIME_OFFSET = 0x3250;
 const PLAY_TIME_FPS = 30;
 
-const CHAR_FIELD_LABELS = {
-  lv: 'Lv', hp: 'HP', max_hp: 'maxHP', mp: 'MP', max_mp: 'maxMP',
-  power: '力', defense: '守備力', speed: '素早さ', intelligence: '賢さ',
-  cool: 'かっこよさ', exp: '経験値', job: '職業ID',
-};
+function charFieldLabels() {
+  return {
+    lv: 'Lv', hp: 'HP', max_hp: 'maxHP', mp: 'MP', max_mp: 'maxMP',
+    power: SL('power'), defense: SL('defense'), speed: SL('speed'), intelligence: SL('intelligence'),
+    cool: SL('cool'), exp: SL('exp'), job: SL('job'),
+  };
+}
+
+window.addEventListener('dq7lang:change', () => { if (current) renderAll(); });
 
 const LOAD_PATH_KEY = 'dq7saveeditor.lastPath';
 const LOAD_DEVICE_KEY = 'dq7saveeditor.lastDevice';
@@ -113,11 +242,11 @@ function base64ToBlob(b64) {
 
 async function loadFromUpload(file) {
   uploadedFileName = file.name;
-  uploadMsg.textContent = `${file.name} (${(file.size / 1024).toFixed(1)}KB) を読み込み中...`;
+  uploadMsg.textContent = `${file.name} (${(file.size / 1024).toFixed(1)}KB) ${SL('loading')}`;
   try {
     const buf = await file.arrayBuffer();
     uploadedDataB64 = arrayBufferToBase64(buf);
-    uploadMsg.textContent = `${file.name} をアップロード中...`;
+    uploadMsg.textContent = `${file.name}${SL('uploading')}`;
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30000);
@@ -139,7 +268,7 @@ async function loadFromUpload(file) {
     }
     const data = await res.json();
     if (data.error) {
-      uploadMsg.textContent = `エラー: ${data.error}`;
+      uploadMsg.textContent = `${DQ7I18N.t('common.error')}: ${data.error}`;
       editPanel.style.display = 'none';
       return;
     }
@@ -149,8 +278,8 @@ async function loadFromUpload(file) {
   } catch (e) {
     console.error('loadFromUpload failed:', e);
     uploadMsg.textContent = e.name === 'AbortError'
-      ? 'タイムアウトしました（30秒）。ファイルが大きすぎるか、サーバーに接続できていません。'
-      : `エラー: ${e.message || e}`;
+      ? SL('timeout')
+      : `${DQ7I18N.t('common.error')}: ${e.message || e}`;
     editPanel.style.display = 'none';
   }
 }
@@ -159,12 +288,12 @@ let browserCurrentPath = null;
 
 async function openBrowser(path) {
   browserPanel.style.display = '';
-  browserList.innerHTML = '<div class="file-meta">読み込み中...</div>';
+  browserList.innerHTML = `<div class="file-meta">${SL('loading')}</div>`;
   const url = path ? `/api/browse?path=${encodeURIComponent(path)}` : '/api/browse';
   const res = await fetch(url);
   const data = await res.json();
   if (data.error) {
-    browserList.innerHTML = `<div class="file-meta">エラー: ${escapeHtml(data.error)}</div>`;
+    browserList.innerHTML = `<div class="file-meta">${DQ7I18N.t('common.error')}: ${escapeHtml(data.error)}</div>`;
     return;
   }
   browserCurrentPath = data.path;
@@ -177,7 +306,7 @@ async function openBrowser(path) {
 function renderBrowserList(entries) {
   browserList.innerHTML = '';
   if (entries.length === 0) {
-    browserList.innerHTML = '<div class="file-meta">(空のフォルダ)</div>';
+    browserList.innerHTML = `<div class="file-meta">${SL('emptyFolder')}</div>`;
     return;
   }
   for (const e of entries) {
@@ -215,7 +344,7 @@ async function loadSave() {
   if (!path) return;
   localStorage.setItem(LOAD_PATH_KEY, path);
   localStorage.setItem(LOAD_DEVICE_KEY, deviceTypeEl.value);
-  loadMsg.textContent = '読み込み中...';
+  loadMsg.textContent = SL('loading');
   try {
     const res = await fetch(`/api/save/load?path=${encodeURIComponent(path)}&device=${deviceTypeEl.value}`);
     if (!res.ok) {
@@ -224,7 +353,7 @@ async function loadSave() {
     }
     const data = await res.json();
     if (data.error) {
-      loadMsg.textContent = `エラー: ${data.error}`;
+      loadMsg.textContent = `${DQ7I18N.t('common.error')}: ${data.error}`;
       editPanel.style.display = 'none';
       return;
     }
@@ -233,7 +362,7 @@ async function loadSave() {
     renderAll();
   } catch (e) {
     console.error('loadSave failed:', e);
-    loadMsg.textContent = `エラー: ${e.message || e}`;
+    loadMsg.textContent = `${DQ7I18N.t('common.error')}: ${e.message || e}`;
     editPanel.style.display = 'none';
   }
 }
@@ -241,8 +370,9 @@ async function loadSave() {
 function renderAll() {
   editPanel.style.display = '';
   const ck = current.checksum_ok
-    ? '<span class="checksum-ok">checksum OK</span>'
-    : `<span class="checksum-bad">checksum不一致 (stored=${current.checksum_stored}, computed=${current.checksum_computed}) - 別デバイス種別かも</span>`;
+    ? `<span class="checksum-ok">${SL('checksumOk')}</span>`
+    : `<span class="checksum-bad">${SL('checksumBad')
+        .replace('{stored}', current.checksum_stored).replace('{computed}', current.checksum_computed)}</span>`;
   const label = mode === 'upload' ? uploadedFileName : current.path;
   fileInfo.innerHTML = `${escapeHtml(label)} (${current.file_size} bytes) - ${ck}`;
   // current.flags_region is now the fresh baseline (either a new file, or
@@ -270,7 +400,7 @@ function hexToBytes(hex) {
 function parseOffsetInput(raw) {
   const s = raw.trim().replace(/^0x/i, '');
   const v = parseInt(s, 16);
-  if (Number.isNaN(v)) throw new Error(`不正なoffset: ${raw}`);
+  if (Number.isNaN(v)) throw new Error(`invalid offset: ${raw}`);
   return v;
 }
 
@@ -313,8 +443,8 @@ function updatePlaceIdState() {
   const bit = id % 8;
   const state = effectiveBitAt(offset, bit);
   placeIdState.textContent = state === null
-    ? '(範囲外)'
-    : `offset=0x${offset.toString(16)} bit=${bit} 現在: ${state ? 'ON' : 'OFF'}`;
+    ? SL('outOfRange')
+    : `offset=0x${offset.toString(16)} bit=${bit} ${SL('current')}: ${state ? 'ON' : 'OFF'}`;
 }
 
 function queuePlaceIdToggle() {
@@ -337,12 +467,12 @@ function queueRawBitToggle() {
   }
   const bit = Number(rawBitNum.value);
   if (!Number.isFinite(bit) || bit < 0 || bit > 7) {
-    alert('bitは0-7で指定してください');
+    alert(SL('bitBadRange'));
     return;
   }
   const cur = effectiveBitAt(offset, bit);
   if (cur === null) {
-    alert('flags_region の範囲外のoffsetです');
+    alert(SL('outOfFlagsRange'));
     return;
   }
   queueRawBit(offset, bit, !cur, null);
@@ -366,7 +496,7 @@ function queueRawByteWrite() {
   }
   const hex = rawByteHex.value.trim().replace(/\s+/g, '');
   if (!/^[0-9a-fA-F]+$/.test(hex) || hex.length % 2 !== 0) {
-    alert('16進数のバイト列を入力してください（例: deadbeef）');
+    alert(SL('hexInputHint'));
     return;
   }
   pendingRawBytes = pendingRawBytes.filter(e => e.offset !== offset);
@@ -396,7 +526,7 @@ function renderPendingRawEdits() {
     const span = document.createElement('span');
     span.textContent = item.text;
     const btn = document.createElement('button');
-    btn.textContent = '取消';
+    btn.textContent = SL('cancel');
     btn.onclick = () => {
       item.remove();
       renderPendingRawEdits();
@@ -440,6 +570,7 @@ function renderFlagsHexDump() {
 
 function renderScalars() {
   scalarGrid.innerHTML = '';
+  const scalarLabels_ = scalarLabels();
   for (const [name, addr, size] of [
     ['gold', 0x0528], ['bank', 0x052C], ['casino', 0x0530],
     ['medal_bank', 0x0534], ['small_medal', 0x0538],
@@ -448,7 +579,7 @@ function renderScalars() {
     const field = document.createElement('div');
     field.className = 'save-field';
     const label = document.createElement('label');
-    label.textContent = `${SCALAR_LABELS[name] || name} (+0x${addr.toString(16)})`;
+    label.textContent = `${scalarLabels_[name] || name} (+0x${addr.toString(16)})`;
     const input = document.createElement('input');
     input.type = 'number';
     input.min = 0;
@@ -465,7 +596,7 @@ function renderScalars() {
   const timeField = document.createElement('div');
   timeField.className = 'save-field';
   const timeLabel = document.createElement('label');
-  timeLabel.textContent = `冒険した時間 (+0x${PLAY_TIME_OFFSET.toString(16)})`;
+  timeLabel.textContent = `${SL('playTime')} (+0x${PLAY_TIME_OFFSET.toString(16)})`;
   const timeWrap = document.createElement('div');
   timeWrap.className = 'play-time-wrap';
   const hoursInput = document.createElement('input');
@@ -475,7 +606,7 @@ function renderScalars() {
   hoursInput.id = 'playTimeHours';
   hoursInput.value = current.scalars.play_time_hours;
   const hoursSuffix = document.createElement('span');
-  hoursSuffix.textContent = '時間';
+  hoursSuffix.textContent = SL('hours');
   const minutesInput = document.createElement('input');
   minutesInput.type = 'number';
   minutesInput.min = 0;
@@ -483,7 +614,7 @@ function renderScalars() {
   minutesInput.id = 'playTimeMinutes';
   minutesInput.value = current.scalars.play_time_minutes;
   const minutesSuffix = document.createElement('span');
-  minutesSuffix.textContent = '分';
+  minutesSuffix.textContent = SL('minutes');
   timeWrap.appendChild(hoursInput);
   timeWrap.appendChild(hoursSuffix);
   timeWrap.appendChild(minutesInput);
@@ -499,12 +630,12 @@ function renderParty() {
     const field = document.createElement('div');
     field.className = 'save-field';
     const label = document.createElement('label');
-    label.textContent = `スロット${i} (現在: ${escapeHtml(slot.character_name)})`;
+    label.textContent = `${SL('slot')}${i} (${SL('current')}: ${escapeHtml(slot.character_name)})`;
     const select = document.createElement('select');
     select.dataset.partySlot = String(i);
     const emptyOpt = document.createElement('option');
     emptyOpt.value = '0';
-    emptyOpt.textContent = '(空き / 0)';
+    emptyOpt.textContent = SL('empty');
     select.appendChild(emptyOpt);
     for (const c of current.character_catalog) {
       const opt = document.createElement('option');
@@ -516,7 +647,7 @@ function renderParty() {
     if (![...select.options].some(o => Number(o.value) === slot.character_id)) {
       const opt = document.createElement('option');
       opt.value = String(slot.character_id);
-      opt.textContent = `#${slot.character_id} (カタログ外)`;
+      opt.textContent = `#${slot.character_id} ${SL('notInCatalog')}`;
       opt.selected = true;
       select.appendChild(opt);
     }
@@ -544,7 +675,8 @@ function renderCharDetail() {
 
   const hint = document.createElement('div');
   hint.className = 'save-hint';
-  hint.textContent = `base offset = 0x${c.base_offset.toString(16)}  |  この枠は「隊列内の並び順」ではなく、キャラ固有の固定ステータス枠（推定: id=${c.presumed_character_id}想定、未検証）です。`;
+  hint.textContent = SL('baseOffsetHint')
+    .replace('{offset}', c.base_offset.toString(16)).replace('{id}', c.presumed_character_id);
   charDetail.appendChild(hint);
 
   const grid = document.createElement('div');
@@ -553,7 +685,7 @@ function renderCharDetail() {
   const nameField = document.createElement('div');
   nameField.className = 'save-field';
   const nameLabel = document.createElement('label');
-  nameLabel.textContent = '名前';
+  nameLabel.textContent = SL('name');
   const nameInput = document.createElement('input');
   nameInput.type = 'text';
   nameInput.maxLength = 6;
@@ -563,7 +695,7 @@ function renderCharDetail() {
   nameField.appendChild(nameInput);
   grid.appendChild(nameField);
 
-  for (const [key, label] of Object.entries(CHAR_FIELD_LABELS)) {
+  for (const [key, label] of Object.entries(charFieldLabels())) {
     const field = document.createElement('div');
     field.className = 'save-field';
     const l = document.createElement('label');
@@ -619,13 +751,13 @@ async function writeSave() {
     await writeSaveInner();
   } catch (e) {
     console.error('writeSave failed:', e);
-    writeMsg.textContent = `エラー: ${e.message || e}`;
+    writeMsg.textContent = `${DQ7I18N.t('common.error')}: ${e.message || e}`;
   }
 }
 
 async function writeSaveInner() {
   const patch = collectPatch();
-  writeMsg.textContent = '書き込み中...';
+  writeMsg.textContent = SL('writing');
 
   if (mode === 'path') {
     const res = await fetch('/api/save/write', {
@@ -635,10 +767,10 @@ async function writeSaveInner() {
     });
     const data = await res.json();
     if (data.error) {
-      writeMsg.textContent = `エラー: ${data.error}`;
+      writeMsg.textContent = `${DQ7I18N.t('common.error')}: ${data.error}`;
       return;
     }
-    writeMsg.textContent = `保存しました (backup: ${data.backup_path})`;
+    writeMsg.textContent = SL('wrote').replace('{backup}', data.backup_path);
     await loadSave();
     return;
   }
@@ -654,7 +786,7 @@ async function writeSaveInner() {
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-    writeMsg.textContent = `エラー: ${data.error || res.status}`;
+    writeMsg.textContent = `${DQ7I18N.t('common.error')}: ${data.error || res.status}`;
     return;
   }
   const blob = await res.blob();
@@ -676,7 +808,7 @@ async function writeSaveInner() {
     body: JSON.stringify({ data_b64: uploadedDataB64, device_type: Number(deviceTypeEl.value) }),
   });
   current = await parseRes.json();
-  writeMsg.textContent = `ダウンロードしました (${uploadedFileName}) - ファイルマネージャで元のファイルに上書きしてください`;
+  writeMsg.textContent = SL('downloaded').replace('{name}', uploadedFileName);
   renderAll();
 }
 

@@ -38,41 +38,42 @@
     color: var(--muted); font-weight: normal; }
   #detail table.rawtable td.txt { text-align: left; font-family: var(--mono); }
 </style>
+<script src="i18n.js"></script>
 </head>
 <body>
 <header>
   <h1>DQ7 Character Stats Viewer</h1>
   <nav>
-    <a href="index.html">スクリプト</a>
-    <a href="fpt.html">FPT</a>
-    <a href="floor.html">フロア</a>
-    <a href="encount.html">エンカウント</a>
-    <a href="item.html">アイテム</a>
-    <a href="character.html" class="current">キャラ</a>
-    <a href="model.html">モデル</a>
-    <a href="images.html">画像</a>
-    <a href="save.html">セーブ</a>
-    <a href="keifa_probe.html">キーファ調査</a>
-    <a href="jidx.html">jidx</a>
+    <a href="index.html" data-i18n="nav.script">スクリプト</a>
+    <a href="fpt.html" data-i18n="nav.fpt">FPT</a>
+    <a href="floor.html" data-i18n="nav.floor">フロア</a>
+    <a href="encount.html" data-i18n="nav.encount">エンカウント</a>
+    <a href="item.html" data-i18n="nav.item">アイテム</a>
+    <a href="character.html" class="current" data-i18n="nav.character">キャラ</a>
+    <a href="model.html" data-i18n="nav.model">モデル</a>
+    <a href="images.html" data-i18n="nav.images">画像</a>
+    <a href="save.html" data-i18n="nav.save">セーブ</a>
+    <a href="keifa_probe.html" data-i18n="nav.keifa_probe">キーファ調査</a>
+    <a href="jidx.html" data-i18n="nav.jidx">jidx</a>
   </nav>
   <span class="kv" id="status"></span>
 </header>
 <div id="datasetTabs">
-  <button data-ds="player_stats" class="active">成長表(LvN)</button>
-  <button data-ds="character_init_data">初期化データ</button>
-  <button data-ds="chara_list">モデル寸法(全NPC)</button>
+  <button data-ds="player_stats" class="active" data-i18n="character.tabGrowth">成長表(LvN)</button>
+  <button data-ds="character_init_data" data-i18n="character.tabInit">初期化データ</button>
+  <button data-ds="chara_list" data-i18n="character.tabCharaList">モデル寸法(全NPC)</button>
 </div>
 <div id="mobileTabs">
-  <button data-pane="charList" class="active">キャラ選択</button>
-  <button data-pane="detail">詳細</button>
+  <button data-pane="charList" class="active" data-i18n="character.tabSelect">キャラ選択</button>
+  <button data-pane="detail" data-i18n="item.tabDetail">詳細</button>
 </div>
 <div id="layout">
   <div class="pane mobile-active" id="charList">
     <div class="ch-sub" id="charSub"></div>
-    <div id="charListInner"><div class="empty">読み込み中...</div></div>
+    <div id="charListInner"><div class="empty" data-i18n="common.loading">読み込み中...</div></div>
   </div>
   <div class="pane" id="detail">
-    <div class="empty">キャラを選ぶとレベル1〜99の成長表が出ます</div>
+    <div class="empty" data-i18n="character.selectHint">キャラを選ぶとレベル1〜99の成長表が出ます</div>
   </div>
 </div>
 <script src="character.js"></script>

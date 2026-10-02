@@ -5,65 +5,66 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DQ7 Script Viewer</title>
 <link rel="stylesheet" href="style.css">
+<script src="i18n.js"></script>
 </head>
 <body>
 <header>
   <h1>DQ7 Script Viewer</h1>
   <nav>
-    <a href="index.html" class="current">スクリプト</a>
-    <a href="fpt.html">FPT</a>
-    <a href="floor.html">フロア</a>
-    <a href="encount.html">エンカウント</a>
-    <a href="item.html">アイテム</a>
-    <a href="character.html">キャラ</a>
-    <a href="model.html">モデル</a>
-    <a href="images.html">画像</a>
-    <a href="save.html">セーブ</a>
-    <a href="keifa_probe.html">キーファ調査</a>
-    <a href="jidx.html">jidx</a>
+    <a href="index.html" class="current" data-i18n="nav.script">スクリプト</a>
+    <a href="fpt.html" data-i18n="nav.fpt">FPT</a>
+    <a href="floor.html" data-i18n="nav.floor">フロア</a>
+    <a href="encount.html" data-i18n="nav.encount">エンカウント</a>
+    <a href="item.html" data-i18n="nav.item">アイテム</a>
+    <a href="character.html" data-i18n="nav.character">キャラ</a>
+    <a href="model.html" data-i18n="nav.model">モデル</a>
+    <a href="images.html" data-i18n="nav.images">画像</a>
+    <a href="save.html" data-i18n="nav.save">セーブ</a>
+    <a href="keifa_probe.html" data-i18n="nav.keifa_probe">キーファ調査</a>
+    <a href="jidx.html" data-i18n="nav.jidx">jidx</a>
   </nav>
-  <button id="editModeToggle" class="mode-btn">編集モード: OFF</button>
-  <button id="historyBtn" class="mode-btn">変更履歴</button>
-  <button id="flagsBtn" class="mode-btn">使用フラグ</button>
-  <button id="searchTextBtn" class="mode-btn">メッセージ検索</button>
-  <button id="repackBtn" class="mode-btn">再パック&amp;Downloadsへ配置</button>
+  <button id="editModeToggle" class="mode-btn" data-i18n="editor.editModeOff">編集モード: OFF</button>
+  <button id="historyBtn" class="mode-btn" data-i18n="editor.historyBtn">変更履歴</button>
+  <button id="flagsBtn" class="mode-btn" data-i18n="editor.flagsBtn">使用フラグ</button>
+  <button id="searchTextBtn" class="mode-btn" data-i18n="editor.searchTextBtn">メッセージ検索</button>
+  <button id="repackBtn" class="mode-btn" data-i18n="editor.repackBtn">再パック&amp;Downloadsへ配置</button>
   <span class="kv" id="status"></span>
   <span class="kv" id="repackStatus"></span>
 </header>
 <div id="mobileTabs">
-  <button data-pane="fileList" class="active">ファイル</button>
-  <button data-pane="tree">ツリー</button>
-  <button data-pane="detail">詳細</button>
+  <button data-pane="fileList" class="active" data-i18n="editor.tabFiles">ファイル</button>
+  <button data-pane="tree" data-i18n="editor.tabTree">ツリー</button>
+  <button data-pane="detail" data-i18n="editor.tabDetail">詳細</button>
 </div>
 <div id="selectionBar" style="display:none;">
   <span id="selectionBarCount"></span>
-  <button id="selectionCopyBtn">コピー</button>
-  <button id="selectionIndentIncBtn" class="secondary">インデントを深く</button>
-  <button id="selectionIndentDecBtn" class="secondary">インデントを浅く</button>
-  <button id="selectionDeleteBtn" class="danger">選択を一括削除</button>
-  <button id="selectionClearBtn" class="secondary">選択解除</button>
+  <button id="selectionCopyBtn" data-i18n="editor.selCopy">コピー</button>
+  <button id="selectionIndentIncBtn" class="secondary" data-i18n="editor.selIndentInc">インデントを深く</button>
+  <button id="selectionIndentDecBtn" class="secondary" data-i18n="editor.selIndentDec">インデントを浅く</button>
+  <button id="selectionDeleteBtn" class="danger" data-i18n="editor.selDelete">選択を一括削除</button>
+  <button id="selectionClearBtn" class="secondary" data-i18n="editor.selClear">選択解除</button>
   <span id="clipboardStatus" class="file-meta"></span>
 </div>
 <div id="pendingBar" style="display:none;">
   <span id="pendingBarCount"></span>
   <span id="pendingBarStatus" class="file-meta"></span>
-  <button id="pendingSaveBtn">保存</button>
-  <button id="pendingDiscardBtn" class="secondary">破棄</button>
+  <button id="pendingSaveBtn" data-i18n="editor.pendingSave">保存</button>
+  <button id="pendingDiscardBtn" class="secondary" data-i18n="editor.pendingDiscard">破棄</button>
 </div>
 <div id="layout">
   <div class="pane mobile-active" id="fileList">
-    <input class="search-box" id="fileSearch" placeholder="ファイル名で絞り込み...">
+    <input class="search-box" id="fileSearch" placeholder="ファイル名で絞り込み..." data-i18n-placeholder="editor.fileSearchPlaceholder">
     <div id="recentListWrap">
-      <div class="file-meta" id="recentLabel" style="margin:6px 0 2px;">最近開いたファイル</div>
+      <div class="file-meta" id="recentLabel" style="margin:6px 0 2px;" data-i18n="editor.recentLabel">最近開いたファイル</div>
       <div id="recentListInner"></div>
     </div>
     <div id="fileListInner"></div>
   </div>
   <div class="pane" id="tree">
-    <div class="empty">左からSCRIPTファイルを選択してください</div>
+    <div class="empty" data-i18n="editor.treeEmpty">左からSCRIPTファイルを選択してください</div>
   </div>
   <div class="pane" id="detail">
-    <div class="empty">コマンドを選択すると詳細が表示されます</div>
+    <div class="empty" data-i18n="editor.detailEmpty">コマンドを選択すると詳細が表示されます</div>
   </div>
 </div>
 <script src="app.js"></script>

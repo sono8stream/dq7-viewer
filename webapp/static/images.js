@@ -3,6 +3,31 @@
 // SCREENTEX の .fpt.lz (type-0x40 圧縮 FPT0。転職ポートレート等。タイルは
 // @assembled として合成表示) を横断し、全部 PNG にデコードして一覧表示する。
 
+DQ7I18N.extend({
+  ja: {
+    'images.tabFile': 'ファイル',
+    'images.searchPlaceholder': 'ファイル名で絞り込み (例: p0003, world, icon)',
+    'images.selectFileHint': '左のファイルを選択してください',
+    'images.loadFailed': '読み込み失敗',
+    'images.noMatch': '該当なし',
+    'images.moreHint': '… 他 {n} 件（絞り込みで表示）',
+    'images.loadingSuffix': '読み込み中...',
+    'images.failedSuffix': '失敗',
+    'images.imagesSuffix': '画像',
+  },
+  en: {
+    'images.tabFile': 'Files',
+    'images.searchPlaceholder': 'Filter by filename (e.g. p0003, world, icon)',
+    'images.selectFileHint': 'Select a file on the left',
+    'images.loadFailed': 'Load failed',
+    'images.noMatch': 'No matches',
+    'images.moreHint': '… {n} more (shown when filtering)',
+    'images.loadingSuffix': 'Loading...',
+    'images.failedSuffix': 'Failed',
+    'images.imagesSuffix': 'images',
+  },
+});
+
 const statusEl = document.getElementById('status');
 const treeInner = document.getElementById('imgTreeInner');
 const searchBox = document.getElementById('imgSearch');
@@ -38,13 +63,17 @@ async function loadTree() {
   try {
     data = await (await fetch('/api/img/tree')).json();
   } catch (e) {
-    treeInner.innerHTML = `<div class="empty">読み込み失敗: ${esc(e.message || e)}</div>`;
+    treeInner.innerHTML = `<div class="empty">${DQ7I18N.t('images.loadFailed')}: ${esc(e.message || e)}</div>`;
     return;
   }
-  if (data.error) { treeInner.innerHTML = `<div class="empty">エラー: ${esc(data.error)}</div>`; return; }
+  if (data.error) { treeInner.innerHTML = `<div class="empty">${DQ7I18N.t('common.error')}: ${esc(data.error)}</div>`; return; }
   tree = data;
   renderTree();
 }
+window.addEventListener('dq7lang:change', () => {
+  renderTree();
+  if (selected) selectFile(selected, document.querySelector('.ifile.selected'));
+});
 
 function renderTree() {
   const q = searchBox.value.trim().toLowerCase();
@@ -75,13 +104,13 @@ function renderTree() {
       const more = document.createElement('div');
       more.className = 'file-meta';
       more.style.padding = '3px 6px';
-      more.textContent = `… 他 ${items.length - list.length} 件（絞り込みで表示）`;
+      more.textContent = DQ7I18N.t('images.moreHint').replace('{n}', items.length - list.length);
       det.appendChild(more);
     }
     treeInner.appendChild(det);
   }
   statusEl.textContent = `${shown} / ${total} files`;
-  if (!shown) treeInner.innerHTML = '<div class="empty">該当なし</div>';
+  if (!shown) treeInner.innerHTML = `<div class="empty">${DQ7I18N.t('images.noMatch')}</div>`;
 }
 searchBox.addEventListener('input', renderTree);
 
@@ -90,17 +119,17 @@ async function selectFile(path, rowEl) {
   document.querySelectorAll('.ifile.selected').forEach(x => x.classList.remove('selected'));
   if (rowEl) rowEl.classList.add('selected');
   if (isMobile()) showPane('imgMain');
-  headEl.textContent = `${path} — 読み込み中...`;
+  headEl.textContent = `${path} — ${DQ7I18N.t('images.loadingSuffix')}`;
   gridEl.innerHTML = '';
   let imgs;
   try {
     imgs = await (await fetch(`/api/img/list?path=${encodeURIComponent(path)}`)).json();
   } catch (e) {
-    headEl.textContent = `${path} — 失敗: ${e.message || e}`;
+    headEl.textContent = `${path} — ${DQ7I18N.t('images.failedSuffix')}: ${e.message || e}`;
     return;
   }
-  if (imgs.error) { headEl.textContent = `${path} — エラー: ${imgs.error}`; return; }
-  headEl.textContent = `${path} — ${imgs.length} 画像`;
+  if (imgs.error) { headEl.textContent = `${path} — ${DQ7I18N.t('common.error')}: ${imgs.error}`; return; }
+  headEl.textContent = `${path} — ${imgs.length} ${DQ7I18N.t('images.imagesSuffix')}`;
   const frag = document.createDocumentFragment();
   for (const im of imgs) {
     const cell = document.createElement('div');

@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DQ7 3D Model Viewer</title>
 <link rel="stylesheet" href="style.css">
+<script src="i18n.js"></script>
 <style>
   #modelLayout { display: flex; flex: 1; min-height: 0; }
   #mfileList { width: 240px; flex-shrink: 0; overflow-y: auto; border-right: 1px solid var(--border); padding: 6px; }
@@ -53,54 +54,54 @@
 <header>
   <h1>DQ7 3D Model Viewer</h1>
   <nav>
-    <a href="index.html">スクリプト</a>
-    <a href="fpt.html">FPT</a>
-    <a href="floor.html">フロア</a>
-    <a href="encount.html">エンカウント</a>
-    <a href="item.html">アイテム</a>
-    <a href="character.html">キャラ</a>
-    <a href="model.html" class="current">モデル</a>
-    <a href="images.html">画像</a>
-    <a href="save.html">セーブ</a>
-    <a href="keifa_probe.html">キーファ調査</a>
-    <a href="jidx.html">jidx</a>
+    <a href="index.html" data-i18n="nav.script">スクリプト</a>
+    <a href="fpt.html" data-i18n="nav.fpt">FPT</a>
+    <a href="floor.html" data-i18n="nav.floor">フロア</a>
+    <a href="encount.html" data-i18n="nav.encount">エンカウント</a>
+    <a href="item.html" data-i18n="nav.item">アイテム</a>
+    <a href="character.html" data-i18n="nav.character">キャラ</a>
+    <a href="model.html" class="current" data-i18n="nav.model">モデル</a>
+    <a href="images.html" data-i18n="nav.images">画像</a>
+    <a href="save.html" data-i18n="nav.save">セーブ</a>
+    <a href="keifa_probe.html" data-i18n="nav.keifa_probe">キーファ調査</a>
+    <a href="jidx.html" data-i18n="nav.jidx">jidx</a>
   </nav>
   <span class="kv" id="status"></span>
 </header>
 <div id="mobileTabs">
-  <button data-pane="mfileList" class="active">ファイル</button>
-  <button data-pane="mviewport">3D</button>
-  <button data-pane="minfo">情報</button>
+  <button data-pane="mfileList" class="active" data-i18n="model.tabFile">ファイル</button>
+  <button data-pane="mviewport" data-i18n="model.tab3d">3D</button>
+  <button data-pane="minfo" data-i18n="model.tabInfo">情報</button>
 </div>
 <div id="modelLayout">
   <div class="pane mobile-active" id="mfileList">
-    <input class="search-box" id="mfileSearch" placeholder="モデル名で絞り込み...">
-    <div id="mfileListInner"><div class="empty">読み込み中...</div></div>
+    <input class="search-box" id="mfileSearch" data-i18n-placeholder="model.searchPlaceholder" placeholder="モデル名で絞り込み...">
+    <div id="mfileListInner"><div class="empty" data-i18n="common.loading">読み込み中...</div></div>
   </div>
   <div class="pane" id="mviewport">
     <canvas id="mcanvas"></canvas>
-    <div id="mstatus">Three.js 読み込み中...</div>
+    <div id="mstatus" data-i18n="model.threeLoading">Three.js 読み込み中...</div>
     <div id="mtoolbar">
       <div class="toolbar-row">
-        <button id="btnTex" class="active">テクスチャ</button>
-        <button id="btnLayers" class="active">重ねテクスチャ</button>
-        <button id="btnWire">ワイヤーフレーム</button>
-        <button id="btnNormals">法線カラー</button>
-        <button id="btnBones">ボーン</button>
-        <button id="btnReset">視点リセット</button>
+        <button id="btnTex" class="active" data-i18n="model.btnTexture">テクスチャ</button>
+        <button id="btnLayers" class="active" data-i18n="model.btnLayers">重ねテクスチャ</button>
+        <button id="btnWire" data-i18n="model.btnWireframe">ワイヤーフレーム</button>
+        <button id="btnNormals" data-i18n="model.btnNormals">法線カラー</button>
+        <button id="btnBones" data-i18n="model.btnBones">ボーン</button>
+        <button id="btnReset" data-i18n="model.btnReset">視点リセット</button>
       </div>
       <div class="toolbar-row">
         <select id="animSelect" disabled></select>
-        <button id="btnPlay" disabled>再生</button>
+        <button id="btnPlay" disabled data-i18n="model.btnPlay">再生</button>
       </div>
       <div class="toolbar-row">
-        <button id="btnPrevModel" disabled>← 前のモデル</button>
-        <button id="btnNextModel" disabled>次のモデル →</button>
+        <button id="btnPrevModel" disabled data-i18n="model.btnPrev">← 前のモデル</button>
+        <button id="btnNextModel" disabled data-i18n="model.btnNext">次のモデル →</button>
       </div>
     </div>
-    <div id="mhint">左ドラッグ:回転 / ホイール:ズーム / 右ドラッグ:移動</div>
+    <div id="mhint" data-i18n="model.hint">左ドラッグ:回転 / ホイール:ズーム / 右ドラッグ:移動</div>
   </div>
-  <div class="pane" id="minfo"><div class="empty">モデルを選択してください</div></div>
+  <div class="pane" id="minfo"><div class="empty" data-i18n="model.selectPrompt">モデルを選択してください</div></div>
 </div>
 
 <script type="importmap">
@@ -117,14 +118,16 @@
   window.addEventListener('error', (e) => {
     if (e.filename && /three|model\.js/.test(e.filename)) {
       const s = document.getElementById('mstatus');
-      if (s) s.textContent = 'スクリプト読み込み失敗: ' + (e.message || e.filename);
+      const t = window.DQ7I18N ? window.DQ7I18N.t : (k, f) => f || k;
+      if (s) s.textContent = t('model.scriptLoadFailed', 'スクリプト読み込み失敗') + ': ' + (e.message || e.filename);
     }
   }, true);
   setTimeout(() => {
     if (!window.__modelViewerReady) {
       const s = document.getElementById('mstatus');
-      if (s && /読み込み中/.test(s.textContent))
-        s.textContent = 'Three.js を読み込めませんでした（CDN 到達不可 or ブロック）。コンソールを確認してください。';
+      const t = window.DQ7I18N ? window.DQ7I18N.t : (k, f) => f || k;
+      if (s && /読み込み中|Loading/.test(s.textContent))
+        s.textContent = t('model.threeLoadFailed', 'Three.js を読み込めませんでした（CDN 到達不可 or ブロック）。コンソールを確認してください。');
     }
   }, 6000);
 </script>

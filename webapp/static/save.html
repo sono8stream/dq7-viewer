@@ -6,31 +6,32 @@
 <title>DQ7 Save Editor</title>
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="save.css">
+<script src="i18n.js"></script>
 </head>
 <body>
 <header>
   <h1>DQ7 Script Viewer</h1>
   <nav>
-    <a href="index.html">スクリプト</a>
-    <a href="fpt.html">FPT</a>
-    <a href="floor.html">フロア</a>
-    <a href="encount.html">エンカウント</a>
-    <a href="item.html">アイテム</a>
-    <a href="character.html">キャラ</a>
-    <a href="model.html">モデル</a>
-    <a href="images.html">画像</a>
-    <a href="save.html" class="current">セーブ</a>
-    <a href="keifa_probe.html">キーファ調査</a>
-    <a href="jidx.html">jidx</a>
+    <a href="index.html" data-i18n="nav.script">スクリプト</a>
+    <a href="fpt.html" data-i18n="nav.fpt">FPT</a>
+    <a href="floor.html" data-i18n="nav.floor">フロア</a>
+    <a href="encount.html" data-i18n="nav.encount">エンカウント</a>
+    <a href="item.html" data-i18n="nav.item">アイテム</a>
+    <a href="character.html" data-i18n="nav.character">キャラ</a>
+    <a href="model.html" data-i18n="nav.model">モデル</a>
+    <a href="images.html" data-i18n="nav.images">画像</a>
+    <a href="save.html" class="current" data-i18n="nav.save">セーブ</a>
+    <a href="keifa_probe.html" data-i18n="nav.keifa_probe">キーファ調査</a>
+    <a href="jidx.html" data-i18n="nav.jidx">jidx</a>
   </nav>
   <span class="kv" id="status"></span>
 </header>
 <div id="saveLayout">
   <div class="save-panel" id="loadPanel">
-    <h2>セーブファイルを開く</h2>
+    <h2 data-i18n="save.openTitle">セーブファイルを開く</h2>
     <div class="save-row" id="modeTabs">
-      <button id="modeUploadBtn" class="mode-btn active">端末から選択</button>
-      <button id="modePathBtn" class="mode-btn">サーバー上のパスを指定</button>
+      <button id="modeUploadBtn" class="mode-btn active" data-i18n="save.modeUpload">端末から選択</button>
+      <button id="modePathBtn" class="mode-btn" data-i18n="save.modePath">サーバー上のパスを指定</button>
       <select id="deviceType">
         <option value="0">3DS</option>
         <option value="1">android</option>
@@ -38,7 +39,7 @@
     </div>
 
     <div id="modeUpload">
-      <p class="file-meta">
+      <p class="file-meta" data-i18n="save.uploadHint">
         ファイル閲覧アプリ（Files等）から直接セーブファイルを選択します。
         編集後は「ダウンロード」ボタンで編集済みファイルを端末に保存し、ファイルマネージャで元のファイルに上書きしてください
         （ブラウザからは元の場所への直接書き込みができないため）。
@@ -50,14 +51,14 @@
     </div>
 
     <div id="modePath" style="display:none;">
-      <p class="file-meta">
+      <p class="file-meta" data-i18n-html="save.pathHint">
         このWebサーバーが動いている端末上のセーブファイルへの絶対パスを指定してください。
         書き込み前に自動で <code>&lt;セーブと同じフォルダ&gt;/dq7_save_backup/</code> にバックアップを作成します。
       </p>
       <div class="save-row">
         <input id="savePath" placeholder="/path/to/save.bin" style="flex:1;">
-        <button id="browseBtn">フォルダを参照...</button>
-        <button id="loadBtn">開く</button>
+        <button id="browseBtn" data-i18n="save.browse">フォルダを参照...</button>
+        <button id="loadBtn" data-i18n="save.open">開く</button>
       </div>
       <div id="loadMsg" class="file-meta"></div>
 
@@ -65,8 +66,8 @@
         <div class="save-row" style="justify-content:space-between;">
           <div class="file-meta" id="browserPath"></div>
           <div class="save-row" style="margin:0;">
-            <button id="browserUpBtn">↑ 上へ</button>
-            <button id="browserCloseBtn">閉じる</button>
+            <button id="browserUpBtn" data-i18n="save.browserUp">↑ 上へ</button>
+            <button id="browserCloseBtn" data-i18n="save.browserClose">閉じる</button>
           </div>
         </div>
         <div id="browserList"></div>
@@ -77,55 +78,55 @@
   <div class="save-panel" id="editPanel" style="display:none;">
     <div class="save-row" style="justify-content:space-between;">
       <div class="file-meta" id="fileInfo"></div>
-      <button id="writeBtn">保存</button>
+      <button id="writeBtn" data-i18n="save.write">保存</button>
     </div>
     <div id="writeMsg" class="file-meta"></div>
 
     <details class="tree-node" open>
-      <summary>所持金など</summary>
+      <summary data-i18n="save.scalarsTitle">所持金など</summary>
       <div id="scalarGrid" class="save-grid"></div>
     </details>
 
     <details class="tree-node" open>
-      <summary>Party（隊列, 0x0510+i*4 - 現在の並び順に入っているキャラID）</summary>
+      <summary data-i18n="save.partyTitle">Party（隊列, 0x0510+i*4 - 現在の並び順に入っているキャラID）</summary>
       <div id="partyGrid" class="save-grid"></div>
     </details>
 
     <details class="tree-node" open>
-      <summary>Charactors（キャラ別ステータス固定枠, 0x0C80+i*STRIDE）</summary>
+      <summary data-i18n="save.charactorsTitle">Charactors（キャラ別ステータス固定枠, 0x0C80+i*STRIDE）</summary>
       <div id="charTabs" class="save-row"></div>
       <div id="charDetail"></div>
     </details>
 
     <details class="tree-node">
-      <summary>生バイト/フラグ（実験的 - 地点名・イベントフラグの対応は未解明）</summary>
-      <p class="save-hint">
+      <summary data-i18n="save.rawTitle">生バイト/フラグ（実験的 - 地点名・イベントフラグの対応は未解明）</summary>
+      <p class="save-hint" data-i18n-html="save.rawHint">
         0x0020〜0x0510の生バイト領域。ルーラ解禁地点(Place.Visit、id/8バイト目のid%8ビット)を含む
         何らかのフラグ配列と推定されるが、地点ID→名前の対応表は入手できていない。ビット/バイト単位で
         直接編集し、実機で挙動を確認する探索用ツール。オフセットは16進数で入力してください（<code>0x</code>省略可）。
       </p>
 
       <div class="save-row">
-        <input id="placeIdInput" type="number" min="0" placeholder="Place ID (例: 5)" style="width:150px;">
+        <input id="placeIdInput" type="number" min="0" placeholder="Place ID (例: 5)" style="width:150px;" data-i18n-placeholder="save.placeIdPlaceholder">
         <span id="placeIdState" class="file-meta"></span>
-        <button id="placeIdToggleBtn">トグルを予約</button>
+        <button id="placeIdToggleBtn" data-i18n="save.placeIdToggle">トグルを予約</button>
       </div>
 
       <div class="save-row">
-        <input id="rawBitOffset" placeholder="offset (hex, 例: 20)" style="width:150px;">
+        <input id="rawBitOffset" placeholder="offset (hex, 例: 20)" style="width:150px;" data-i18n-placeholder="save.rawBitOffsetPlaceholder">
         <input id="rawBitNum" type="number" min="0" max="7" placeholder="bit(0-7)" style="width:90px;">
-        <button id="rawBitToggleBtn">ビットをトグル予約</button>
+        <button id="rawBitToggleBtn" data-i18n="save.rawBitToggle">ビットをトグル予約</button>
       </div>
 
       <div class="save-row">
         <input id="rawByteOffset" placeholder="offset (hex)" style="width:150px;">
-        <input id="rawByteHex" placeholder="新しいバイト列(hex) 例: deadbeef" style="flex:1;">
-        <button id="rawByteWriteBtn">バイト書き込みを予約</button>
+        <input id="rawByteHex" placeholder="新しいバイト列(hex) 例: deadbeef" style="flex:1;" data-i18n-placeholder="save.rawByteHexPlaceholder">
+        <button id="rawByteWriteBtn" data-i18n="save.rawByteWrite">バイト書き込みを予約</button>
       </div>
 
       <div id="pendingRawEdits"></div>
 
-      <div class="save-hint" style="margin-top:8px;">flags_region の現在のhexダンプ（予約中の変更を反映済み、offsetは絶対値）:</div>
+      <div class="save-hint" style="margin-top:8px;" data-i18n="save.hexDumpLabel">flags_region の現在のhexダンプ（予約中の変更を反映済み、offsetは絶対値）:</div>
       <div id="flagsHexDump" class="hexdump"></div>
     </details>
   </div>

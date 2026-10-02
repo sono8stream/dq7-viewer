@@ -22,37 +22,38 @@
   #floorList .grp { font-size: 11px; color: var(--muted); }
   .floor-sub { font-size: 12px; color: var(--muted); margin: 2px 0 6px; white-space: normal; }
 </style>
+<script src="i18n.js"></script>
 </head>
 <body>
 <header>
   <h1>DQ7 Floor / Map Viewer</h1>
   <nav>
-    <a href="index.html">スクリプト</a>
-    <a href="fpt.html">FPT</a>
-    <a href="floor.html" class="current">フロア</a>
-    <a href="encount.html">エンカウント</a>
-    <a href="item.html">アイテム</a>
-    <a href="character.html">キャラ</a>
-    <a href="model.html">モデル</a>
-    <a href="images.html">画像</a>
-    <a href="save.html">セーブ</a>
-    <a href="keifa_probe.html">キーファ調査</a>
-    <a href="jidx.html">jidx</a>
+    <a href="index.html" data-i18n="nav.script">スクリプト</a>
+    <a href="fpt.html" data-i18n="nav.fpt">FPT</a>
+    <a href="floor.html" class="current" data-i18n="nav.floor">フロア</a>
+    <a href="encount.html" data-i18n="nav.encount">エンカウント</a>
+    <a href="item.html" data-i18n="nav.item">アイテム</a>
+    <a href="character.html" data-i18n="nav.character">キャラ</a>
+    <a href="model.html" data-i18n="nav.model">モデル</a>
+    <a href="images.html" data-i18n="nav.images">画像</a>
+    <a href="save.html" data-i18n="nav.save">セーブ</a>
+    <a href="keifa_probe.html" data-i18n="nav.keifa_probe">キーファ調査</a>
+    <a href="jidx.html" data-i18n="nav.jidx">jidx</a>
   </nav>
   <span class="kv" id="status"></span>
 </header>
 <div id="mobileTabs">
-  <button data-pane="floorList" class="active">フロア一覧</button>
-  <button data-pane="detail">詳細</button>
+  <button data-pane="floorList" class="active" data-i18n="floor.tabList">フロア一覧</button>
+  <button data-pane="detail" data-i18n="fpt.tabDetail">詳細</button>
 </div>
 <div id="layout">
   <div class="pane mobile-active" id="floorList">
-    <input class="search-box" id="floorSearch" placeholder="フロアID / マップコード / group で絞り込み...">
+    <input class="search-box" id="floorSearch" placeholder="フロアID / マップコード / group で絞り込み..." data-i18n-placeholder="floor.searchPlaceholder">
     <div class="floor-sub" id="floorSub"></div>
-    <div id="floorListInner"><div class="empty">読み込み中...</div></div>
+    <div id="floorListInner"><div class="empty" data-i18n="common.loading">読み込み中...</div></div>
   </div>
   <div class="pane" id="detail">
-    <div class="empty">フロアを選択すると、対応ファイルと出入りのワープ一覧が表示されます</div>
+    <div class="empty" data-i18n="floor.selectPrompt">フロアを選択すると、対応ファイルと出入りのワープ一覧が表示されます</div>
   </div>
 </div>
 <script src="floor.js"></script>

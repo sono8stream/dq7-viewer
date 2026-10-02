@@ -9,6 +9,101 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
+const I18N = window.DQ7I18N;
+const t = I18N ? I18N.t : (k, f) => f !== undefined ? f : k;
+if (I18N) {
+  I18N.extend({
+    ja: {
+      'model.tabFile': 'ファイル',
+      'model.tab3d': '3D',
+      'model.tabInfo': '情報',
+      'model.searchPlaceholder': 'モデル名で絞り込み...',
+      'model.threeLoading': 'Three.js 読み込み中...',
+      'model.btnTexture': 'テクスチャ',
+      'model.btnLayers': '重ねテクスチャ',
+      'model.btnWireframe': 'ワイヤーフレーム',
+      'model.btnNormals': '法線カラー',
+      'model.btnBones': 'ボーン',
+      'model.btnReset': '視点リセット',
+      'model.btnPlay': '再生',
+      'model.btnPause': '一時停止',
+      'model.btnPrev': '← 前のモデル',
+      'model.btnNext': '次のモデル →',
+      'model.hint': '左ドラッグ:回転 / ホイール:ズーム / 右ドラッグ:移動',
+      'model.selectPrompt': 'モデルを選択してください',
+      'model.noModelSelected': 'モデル未選択',
+      'model.scriptLoadFailed': 'スクリプト読み込み失敗',
+      'model.threeLoadFailed': 'Three.js を読み込めませんでした（CDN 到達不可 or ブロック）。コンソールを確認してください。',
+      'model.noAnim': '(アニメなし)',
+      'model.animLoadFailed': 'アニメ読み込み失敗',
+      'model.clipNoBones': 'このクリップは動くボーンが0件でした(静止ポーズの可能性。他のクリップ名も試してみてください)',
+      'model.clipPlayingUnmatched': '再生中',
+      'model.unmatchedBoneNote': '個のボーントラックはこのモデルに無いパーツ用',
+      'model.others': '他',
+      'model.items': '件',
+      'model.geometry': 'ジオメトリ',
+      'model.shapes': 'シェイプ',
+      'model.chunks': 'チャンク',
+      'model.materials': 'マテリアル',
+      'model.skeleton': 'スケルトン',
+      'model.bones': 'ボーン',
+      'model.bindPose': 'バインドポーズ',
+      'model.animation': 'アニメーション',
+      'model.animPlayHint': '下のツールバーで再生。骨格の一部のみ推定デコード',
+      'model.textures': 'テクスチャ',
+      'model.loading': '読み込み中...',
+      'model.failed': '失敗',
+      'model.error': 'エラー',
+      'model.meshes': 'メッシュ',
+      'model.geometryUndecoded': 'ジオメトリ未デコード(構造は右パネル)',
+    },
+    en: {
+      'model.tabFile': 'Files',
+      'model.tab3d': '3D',
+      'model.tabInfo': 'Info',
+      'model.searchPlaceholder': 'Filter by model name...',
+      'model.threeLoading': 'Loading Three.js...',
+      'model.btnTexture': 'Texture',
+      'model.btnLayers': 'Layered texture',
+      'model.btnWireframe': 'Wireframe',
+      'model.btnNormals': 'Normal colors',
+      'model.btnBones': 'Bones',
+      'model.btnReset': 'Reset view',
+      'model.btnPlay': 'Play',
+      'model.btnPause': 'Pause',
+      'model.btnPrev': '← Prev model',
+      'model.btnNext': 'Next model →',
+      'model.hint': 'Left-drag: rotate / Wheel: zoom / Right-drag: pan',
+      'model.selectPrompt': 'Select a model',
+      'model.noModelSelected': 'No model selected',
+      'model.scriptLoadFailed': 'Script failed to load',
+      'model.threeLoadFailed': 'Failed to load Three.js (CDN unreachable or blocked). Check the console.',
+      'model.noAnim': '(no animation)',
+      'model.animLoadFailed': 'Failed to load animation',
+      'model.clipNoBones': 'This clip had 0 moving bone tracks (possibly a static pose; try other clip names)',
+      'model.clipPlayingUnmatched': 'Playing',
+      'model.unmatchedBoneNote': "bone track(s) are for parts this model doesn't have",
+      'model.others': '+',
+      'model.items': 'more',
+      'model.geometry': 'Geometry',
+      'model.shapes': 'shapes',
+      'model.chunks': 'Chunks',
+      'model.materials': 'Materials',
+      'model.skeleton': 'Skeleton',
+      'model.bones': 'bones',
+      'model.bindPose': 'bind pose',
+      'model.animation': 'Animation',
+      'model.animPlayHint': 'play from the toolbar below; some bones are only heuristically decoded',
+      'model.textures': 'Textures',
+      'model.loading': 'Loading...',
+      'model.failed': 'Failed',
+      'model.error': 'Error',
+      'model.meshes': 'meshes',
+      'model.geometryUndecoded': 'Geometry not decoded (see structure in the right panel)',
+    },
+  });
+}
+
 const statusEl = document.getElementById('status');
 const listInner = document.getElementById('mfileListInner');
 const searchBox = document.getElementById('mfileSearch');
@@ -58,7 +153,7 @@ function initThree() {
   resize();
   window.addEventListener('resize', resize);
   animate();
-  mstatus.textContent = 'モデル未選択';
+  mstatus.textContent = t('model.noModelSelected');
   window.__modelViewerReady = true;
 }
 
@@ -583,7 +678,7 @@ const btnPlay = document.getElementById('btnPlay');
 
 function populateAnimList(animList) {
   if (!animSelect) return;
-  animSelect.innerHTML = '<option value="">(アニメなし)</option>';
+  animSelect.innerHTML = `<option value="">${t('model.noAnim')}</option>`;
   for (const a of (animList || [])) {
     const opt = document.createElement('option');
     opt.value = a.name;
@@ -597,18 +692,18 @@ function populateAnimList(animList) {
 async function loadAnim(name) {
   currentAnim = null;
   animPlaying = false;
-  if (btnPlay) { btnPlay.disabled = !name; btnPlay.textContent = '再生'; }
+  if (btnPlay) { btnPlay.disabled = !name; btnPlay.textContent = t('model.btnPlay'); }
   resetBonesToBindPose();
   if (!name || !currentFile) return;
   try {
     const res = await fetch(`/api/model/anim?file=${encodeURIComponent(currentFile)}&name=${encodeURIComponent(name)}`);
     const data = await res.json();
-    if (data.error) { mstatus.textContent = `アニメ読み込み失敗: ${data.error}`; return; }
+    if (data.error) { mstatus.textContent = `${t('model.animLoadFailed')}: ${data.error}`; return; }
     currentAnim = data;
     animPlaying = true;
     animElapsed = 0;
     animLastTick = performance.now();
-    if (btnPlay) btnPlay.textContent = '一時停止';
+    if (btnPlay) btnPlay.textContent = t('model.btnPause');
     // Some clips (confirmed on multiple characters, e.g. some jobs' "idle"/
     // "run"/"dash") genuinely decode to zero sampled bone tracks - every
     // bone stays at its bind pose for the whole clip, so playback looks
@@ -618,7 +713,7 @@ async function loadAnim(name) {
     // of silently doing nothing, so it doesn't read as "the viewer is broken".
     const trackNames = Object.keys(data.tracks || {});
     if (trackNames.length === 0) {
-      mstatus.textContent = `${name}: このクリップは動くボーンが0件でした(静止ポーズの可能性。他のクリップ名も試してみてください)`;
+      mstatus.textContent = `${name}: ${t('model.clipNoBones')}`;
       return;
     }
     // Some tracks reference bone names this particular model's OWN skeleton
@@ -635,11 +730,17 @@ async function loadAnim(name) {
     // model doesn't have that part" instead of "the viewer lost some bones".
     const unmatched = trackNames.filter(n => !skinBonesByName || !skinBonesByName.has(n));
     if (unmatched.length) {
-      const shown = unmatched.slice(0, 4).join(', ') + (unmatched.length > 4 ? ` 他${unmatched.length - 4}件` : '');
-      mstatus.textContent = `${name}: 再生中(${unmatched.length}個のボーントラックはこのモデルに無いパーツ用: ${shown})`;
+      const lang = I18N ? I18N.getLang() : 'ja';
+      const moreSuffix = unmatched.length > 4
+        ? (lang === 'en' ? ` +${unmatched.length - 4} more` : ` 他${unmatched.length - 4}件`)
+        : '';
+      const shown = unmatched.slice(0, 4).join(', ') + moreSuffix;
+      mstatus.textContent = lang === 'en'
+        ? `${name}: ${t('model.clipPlayingUnmatched')} (${unmatched.length} ${t('model.unmatchedBoneNote')}: ${shown})`
+        : `${name}: ${t('model.clipPlayingUnmatched')}(${unmatched.length}${t('model.unmatchedBoneNote')}: ${shown})`;
     }
   } catch (e) {
-    mstatus.textContent = `アニメ読み込み失敗: ${e.message || e}`;
+    mstatus.textContent = `${t('model.animLoadFailed')}: ${e.message || e}`;
   }
 }
 
@@ -704,7 +805,7 @@ if (btnPlay) btnPlay.addEventListener('click', () => {
   if (!currentAnim) return;
   animPlaying = !animPlaying;
   if (animPlaying) animLastTick = performance.now();
-  btnPlay.textContent = animPlaying ? '一時停止' : '再生';
+  btnPlay.textContent = animPlaying ? t('model.btnPause') : t('model.btnPlay');
 });
 
 function clearOverlays() {
@@ -820,13 +921,14 @@ function esc(s) {
 }
 
 function renderInfo(r) {
+  lastModelResult = r;
   const st = r.structure || {};
   const g = r.geometry || {};
   const L = [];
   L.push(`${r.file}`);
   L.push(`CGFX rev ${st.revision}  ${st.size} bytes`);
   L.push('');
-  L.push(`ジオメトリ: ${g.ok_count}/${g.total_shapes} シェイプ`);
+  L.push(`${t('model.geometry')}: ${g.ok_count}/${g.total_shapes} ${t('model.shapes')}`);
   for (const s of (g.shapes || [])) {
     L.push(s.ok
       ? `  [OK] ${s.name || '(no name)'} v=${s.vcount} i=${s.icount}${s.texture ? '  tex=' + s.texture : ''}${s.skinned ? '  skinned' : ''}`
@@ -837,9 +939,9 @@ function renderInfo(r) {
     for (const e of g.errors.slice(0, 6)) L.push(`   ${e}`);
   }
   L.push('');
-  L.push('チャンク: ' + JSON.stringify(st.chunk_counts || {}));
+  L.push(`${t('model.chunks')}: ` + JSON.stringify(st.chunk_counts || {}));
   if (r.materials && r.materials.length) {
-    L.push('\nマテリアル:');
+    L.push(`\n${t('model.materials')}:`);
     for (const m of r.materials) {
       const at = m.alphaTest;
       const atStr = at ? (at.enabled ? `alphaTest ${at.functionName} ref=${at.reference}` : 'alphaTest disabled(opaque)') : 'alphaTest unknown';
@@ -850,14 +952,14 @@ function renderInfo(r) {
     }
   }
   if (r.skeleton && r.skeleton.length) {
-    L.push(`\nスケルトン (${r.skeleton.length} ボーン, バインドポーズ):`);
+    L.push(`\n${t('model.skeleton')} (${r.skeleton.length} ${t('model.bones')}, ${t('model.bindPose')}):`);
     L.push('  ' + r.skeleton.slice(0, 40).map(b => b.name).join(', ') +
       (r.skeleton.length > 40 ? ' …' : ''));
   }
   if (r.animList && r.animList.length) {
-    L.push(`\nアニメーション (${r.animList.length}, 下のツールバーで再生。骨格の一部のみ推定デコード):`);
+    L.push(`\n${t('model.animation')} (${r.animList.length}, ${t('model.animPlayHint')}):`);
     for (const a of r.animList.slice(0, 60)) L.push(`  ${a.name} (${Math.round(a.frames)}f)`);
-    if (r.animList.length > 60) L.push(`  … 他 ${r.animList.length - 60}`);
+    if (r.animList.length > 60) L.push(`  … +${r.animList.length - 60}`);
   }
   for (const [k, v] of Object.entries(st.dicts || {})) {
     if (k === 'Textures' || k === 'Materials' || k === 'Models') continue;
@@ -867,7 +969,7 @@ function renderInfo(r) {
   let html = `<pre style="margin:0;white-space:pre-wrap">${esc(L.join('\n'))}</pre>`;
   const texs = r.textures || [];
   if (texs.length) {
-    html += `<div style="margin-top:10px;font-size:11px;color:var(--muted)">テクスチャ (${texs.length})</div>`;
+    html += `<div style="margin-top:10px;font-size:11px;color:var(--muted)">${t('model.textures')} (${texs.length})</div>`;
     html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">';
     for (const t of texs) {
       const cap = `${esc(t.name)}<br>${t.width}x${t.height} ${esc(t.format || '?')}`;
@@ -887,25 +989,33 @@ function renderInfo(r) {
   infoEl.innerHTML = html;
 }
 
+let lastModelResult = null;
+
+window.addEventListener('dq7lang:change', () => {
+  if (lastModelResult) renderInfo(lastModelResult);
+  if (btnPlay && !btnPlay.disabled) btnPlay.textContent = animPlaying ? t('model.btnPause') : t('model.btnPlay');
+  if (!selected) mstatus.textContent = t('model.noModelSelected');
+});
+
 async function selectModel(path, rowEl) {
   selected = path;
   document.querySelectorAll('.mfile-row.selected').forEach(x => x.classList.remove('selected'));
   if (rowEl) rowEl.classList.add('selected');
   updatePrevNextButtons();
-  mstatus.textContent = '読み込み中...';
-  infoEl.textContent = '読み込み中...';
+  mstatus.textContent = t('model.loading');
+  infoEl.textContent = t('model.loading');
   if (isMobile()) showPane('mviewport');
   let r;
   try {
     const res = await fetch(`/api/model?file=${encodeURIComponent(path)}`);
     r = await res.json();
   } catch (e) {
-    mstatus.textContent = `失敗: ${e.message || e}`;
+    mstatus.textContent = `${t('model.failed')}: ${e.message || e}`;
     return;
   }
   if (r.error) {
-    mstatus.textContent = `エラー: ${r.error}`;
-    infoEl.textContent = `エラー: ${r.error}`;
+    mstatus.textContent = `${t('model.error')}: ${r.error}`;
+    infoEl.textContent = `${t('model.error')}: ${r.error}`;
     return;
   }
   renderInfo(r);
@@ -917,13 +1027,13 @@ async function selectModel(path, rowEl) {
   populateAnimList(r.animList);
   if (built > 0) {
     frameObject();
-    mstatus.textContent = `${path.split('/').pop()} — ${built} メッシュ` +
-      (nbones ? ` / ${nbones} ボーン` : '');
+    mstatus.textContent = `${path.split('/').pop()} — ${built} ${t('model.meshes')}` +
+      (nbones ? ` / ${nbones} ${t('model.bones')}` : '');
   } else {
     clearModel();
     if (nbones) frameObject();
-    mstatus.textContent = `${path.split('/').pop()} — ジオメトリ未デコード(構造は右パネル)` +
-      (nbones ? ` / ${nbones} ボーン` : '');
+    mstatus.textContent = `${path.split('/').pop()} — ${t('model.geometryUndecoded')}` +
+      (nbones ? ` / ${nbones} ${t('model.bones')}` : '');
   }
 }
 

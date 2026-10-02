@@ -5,40 +5,41 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DQ7 FPT Viewer</title>
 <link rel="stylesheet" href="style.css">
+<script src="i18n.js"></script>
 </head>
 <body>
 <header>
   <h1>DQ7 FPT Viewer</h1>
   <nav>
-    <a href="index.html">スクリプト</a>
-    <a href="fpt.html" class="current">FPT</a>
-    <a href="floor.html">フロア</a>
-    <a href="encount.html">エンカウント</a>
-    <a href="item.html">アイテム</a>
-    <a href="character.html">キャラ</a>
-    <a href="model.html">モデル</a>
-    <a href="images.html">画像</a>
-    <a href="save.html">セーブ</a>
-    <a href="keifa_probe.html">キーファ調査</a>
-    <a href="jidx.html">jidx</a>
+    <a href="index.html" data-i18n="nav.script">スクリプト</a>
+    <a href="fpt.html" class="current" data-i18n="nav.fpt">FPT</a>
+    <a href="floor.html" data-i18n="nav.floor">フロア</a>
+    <a href="encount.html" data-i18n="nav.encount">エンカウント</a>
+    <a href="item.html" data-i18n="nav.item">アイテム</a>
+    <a href="character.html" data-i18n="nav.character">キャラ</a>
+    <a href="model.html" data-i18n="nav.model">モデル</a>
+    <a href="images.html" data-i18n="nav.images">画像</a>
+    <a href="save.html" data-i18n="nav.save">セーブ</a>
+    <a href="keifa_probe.html" data-i18n="nav.keifa_probe">キーファ調査</a>
+    <a href="jidx.html" data-i18n="nav.jidx">jidx</a>
   </nav>
   <span class="kv" id="status"></span>
 </header>
 <div id="mobileTabs">
-  <button data-pane="fileList" class="active">ファイル</button>
-  <button data-pane="tree">エントリ</button>
-  <button data-pane="detail">詳細</button>
+  <button data-pane="fileList" class="active" data-i18n="fpt.tabFiles">ファイル</button>
+  <button data-pane="tree" data-i18n="fpt.tabEntries">エントリ</button>
+  <button data-pane="detail" data-i18n="fpt.tabDetail">詳細</button>
 </div>
 <div id="layout">
   <div class="pane mobile-active" id="fileList">
-    <input class="search-box" id="fileSearch" placeholder="ファイル名で絞り込み...">
+    <input class="search-box" id="fileSearch" placeholder="ファイル名で絞り込み..." data-i18n-placeholder="fpt.searchPlaceholder">
     <div id="fileListInner"></div>
   </div>
   <div class="pane" id="tree">
-    <div class="empty">左から.fptファイルを選択してください</div>
+    <div class="empty" data-i18n="fpt.selectFilePrompt">左から.fptファイルを選択してください</div>
   </div>
   <div class="pane" id="detail">
-    <div class="empty">エントリを選択すると詳細が表示されます</div>
+    <div class="empty" data-i18n="fpt.selectEntryPrompt">エントリを選択すると詳細が表示されます</div>
   </div>
 </div>
 <script src="fpt.js"></script>

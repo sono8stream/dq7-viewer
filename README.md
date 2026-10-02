@@ -26,9 +26,39 @@
 ## 使い方
 
 本ビュアーを動かすには、**あなた自身が合法的に所有するROM**から抽出した
-RomFS/ExeFSのデータが別途必要です。このリポジトリにはその抽出手順・ツールは
-含まれていません（手元の正規ROMから抽出したデータを`rom/`以下に配置する前提の
-設計です）。
+RomFSのデータが別途必要です。このリポジトリにはROMの吸い出し・RomFS抽出
+手順やツールは含まれていません。
+
+### ROMデータの配置方法
+
+リポジトリ直下（`webapp/`と同じ階層）に`rom/extracted/`というフォルダを作り、
+その中にRomFSを展開したときの中身（`SCRIPT/` `MESS/` `LEVELDATA/` `CHARACTER/`
+`MONSTER/` `TEXT/` `MENULIST/` `TEXTURE/` `MAP/` 等、RomFS本来のフォルダ名の
+まま）をそっくりそのまま配置してください。
+
+```
+dq7-viewer/
+├── webapp/
+└── rom/
+    └── extracted/
+        ├── SCRIPT/
+        ├── MESS/
+        ├── LEVELDATA/
+        ├── CHARACTER/
+        ├── MONSTER/
+        ├── TEXT/
+        ├── MENULIST/
+        ├── TEXTURE/
+        ├── MAP/
+        └── ...(RomFSの他のフォルダも同様にそのまま)
+```
+
+`rom/`フォルダ自体は`.gitignore`で追跡対象外にしてあるので、配置しても誤って
+コミットされることはありません。RomFSの吸い出し・展開（CIAからの抽出等）は
+GodMode9やCTR系ツールなど、既存の3DS ROMツールを各自利用してください
+（本リポジトリはその工程を含みません）。
+
+### 起動
 
 ```
 cd webapp

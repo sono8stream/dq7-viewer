@@ -35,36 +35,37 @@
     #imgTree.mobile-active, #imgMain.mobile-active { display: block; }
   }
 </style>
+<script src="i18n.js"></script>
 </head>
 <body>
 <header>
   <h1>DQ7 Image Browser</h1>
   <nav>
-    <a href="index.html">スクリプト</a>
-    <a href="fpt.html">FPT</a>
-    <a href="floor.html">フロア</a>
-    <a href="encount.html">エンカウント</a>
-    <a href="item.html">アイテム</a>
-    <a href="character.html">キャラ</a>
-    <a href="model.html">モデル</a>
-    <a href="images.html" class="current">画像</a>
-    <a href="save.html">セーブ</a>
-    <a href="keifa_probe.html">キーファ調査</a>
-    <a href="jidx.html">jidx</a>
+    <a href="index.html" data-i18n="nav.script">スクリプト</a>
+    <a href="fpt.html" data-i18n="nav.fpt">FPT</a>
+    <a href="floor.html" data-i18n="nav.floor">フロア</a>
+    <a href="encount.html" data-i18n="nav.encount">エンカウント</a>
+    <a href="item.html" data-i18n="nav.item">アイテム</a>
+    <a href="character.html" data-i18n="nav.character">キャラ</a>
+    <a href="model.html" data-i18n="nav.model">モデル</a>
+    <a href="images.html" class="current" data-i18n="nav.images">画像</a>
+    <a href="save.html" data-i18n="nav.save">セーブ</a>
+    <a href="keifa_probe.html" data-i18n="nav.keifa_probe">キーファ調査</a>
+    <a href="jidx.html" data-i18n="nav.jidx">jidx</a>
   </nav>
   <span class="kv" id="status"></span>
 </header>
 <div id="mobileTabs">
-  <button data-pane="imgTree" class="active">ファイル</button>
-  <button data-pane="imgMain">画像</button>
+  <button data-pane="imgTree" class="active" data-i18n="images.tabFile">ファイル</button>
+  <button data-pane="imgMain" data-i18n="nav.images">画像</button>
 </div>
 <div id="imgLayout">
   <div class="pane mobile-active" id="imgTree">
-    <input class="search-box" id="imgSearch" placeholder="ファイル名で絞り込み (例: p0003, world, icon)">
-    <div id="imgTreeInner"><div class="empty">読み込み中...</div></div>
+    <input class="search-box" id="imgSearch" data-i18n-placeholder="images.searchPlaceholder" placeholder="ファイル名で絞り込み (例: p0003, world, icon)">
+    <div id="imgTreeInner"><div class="empty" data-i18n="common.loading">読み込み中...</div></div>
   </div>
   <div class="pane" id="imgMain">
-    <div id="imgHead" class="file-meta">左のファイルを選択してください</div>
+    <div id="imgHead" class="file-meta" data-i18n="images.selectFileHint">左のファイルを選択してください</div>
     <div id="imgGrid"></div>
   </div>
 </div>

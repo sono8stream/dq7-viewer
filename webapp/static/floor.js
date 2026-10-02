@@ -3,6 +3,69 @@
 // スクリプト/FPT/セーブと同列の独立ページ。バックエンドは
 // /api/floor_list (一覧) と /api/floor_detail?id=N (詳細)。
 
+DQ7I18N.extend({
+  ja: {
+    'floor.tabList': 'フロア一覧',
+    'floor.searchPlaceholder': 'フロアID / マップコード / group で絞り込み...',
+    'floor.selectPrompt': 'フロアを選択すると、対応ファイルと出入りのワープ一覧が表示されます',
+    'floor.noMatch': '該当なし',
+    'floor.loadFailed': '読み込み失敗',
+    'floor.loadingInitial': '読み込み中... (初回はSCRIPT全走査のため数秒かかります)',
+    'floor.noName': '(no name)',
+    'floor.hasScript': 'が存在',
+    'floor.noScriptFile': '対応する SCRIPT/<mapcode>.bin なし',
+    'floor.warpsInTitle': 'このフロアを行き先にする MAP_WARP の数',
+    'floor.warpsOutTitle': 'このフロアのSCRIPT内にある MAP_WARP の数',
+    'floor.facing': '向き',
+    'floor.flag5': 'flag5',
+    'floor.floorIdLabel': 'フロアID',
+    'floor.mapcodeLabel': 'マップコード',
+    'floor.groupLabel': 'group',
+    'floor.noNameLabel': '(名前なし)',
+    'floor.layoutLabel': 'レイアウト',
+    'floor.layoutDesc': '+0x00 u32=(未使用) / +0x04 u16=フロアID / +0x06 u16=group / +0x08 char[8]=マップコード',
+    'floor.scriptFileLabel': '対応SCRIPTファイル',
+    'floor.scriptFileNone': '(なし — SCRIPT/<mapcode>.bin が存在しない)',
+    'floor.warpsInSection': 'このフロアへ入ってくる MAP_WARP',
+    'floor.warpsInSub': '別のフロアのスクリプトが param0=%d で飛んでくる箇所:',
+    'floor.none': '(なし)',
+    'floor.warpsOutSection': 'このフロアのSCRIPT内にある MAP_WARP',
+    'floor.warpsOutUnavailable': '(対応SCRIPTファイルがないため取得不可)',
+    'floor.footnote1': '※ MAP_WARP(opcode 0x0001001f) は「有力な仮説・実機未検証」。',
+    'floor.footnote2': '  詳細は docs/script_opcode_0x1001f_map_warp.md。',
+  },
+  en: {
+    'floor.tabList': 'Floors',
+    'floor.searchPlaceholder': 'Filter by floor ID / map code / group...',
+    'floor.selectPrompt': 'Select a floor to see its file and inbound/outbound warps',
+    'floor.noMatch': 'No matches',
+    'floor.loadFailed': 'Load failed',
+    'floor.loadingInitial': 'Loading... (first load scans all SCRIPT files, takes a few seconds)',
+    'floor.noName': '(no name)',
+    'floor.hasScript': 'exists',
+    'floor.noScriptFile': 'no matching SCRIPT/<mapcode>.bin',
+    'floor.warpsInTitle': 'Number of MAP_WARP commands that target this floor',
+    'floor.warpsOutTitle': 'Number of MAP_WARP commands inside this floor\'s SCRIPT',
+    'floor.facing': 'facing',
+    'floor.flag5': 'flag5',
+    'floor.floorIdLabel': 'Floor ID',
+    'floor.mapcodeLabel': 'Map code',
+    'floor.groupLabel': 'group',
+    'floor.noNameLabel': '(no name)',
+    'floor.layoutLabel': 'Layout',
+    'floor.layoutDesc': '+0x00 u32=(unused) / +0x04 u16=floor ID / +0x06 u16=group / +0x08 char[8]=map code',
+    'floor.scriptFileLabel': 'Matching SCRIPT file',
+    'floor.scriptFileNone': '(none — SCRIPT/<mapcode>.bin does not exist)',
+    'floor.warpsInSection': 'MAP_WARP commands entering this floor',
+    'floor.warpsInSub': 'Places where another floor\'s script jumps here with param0=%d:',
+    'floor.none': '(none)',
+    'floor.warpsOutSection': 'MAP_WARP commands inside this floor\'s SCRIPT',
+    'floor.warpsOutUnavailable': '(unavailable — no matching SCRIPT file)',
+    'floor.footnote1': '* MAP_WARP (opcode 0x0001001f) is a "strong hypothesis, unverified on real hardware".',
+    'floor.footnote2': '  See docs/script_opcode_0x1001f_map_warp.md for details.',
+  },
+});
+
 const listInner = document.getElementById('floorListInner');
 const searchBox = document.getElementById('floorSearch');
 const subEl = document.getElementById('floorSub');
@@ -31,24 +94,36 @@ function esc(s) {
 }
 
 async function loadList() {
-  listInner.innerHTML = '<div class="empty">読み込み中... (初回はSCRIPT全走査のため数秒かかります)</div>';
+  listInner.innerHTML = `<div class="empty">${DQ7I18N.t('floor.loadingInitial')}</div>`;
   let data;
   try {
     const res = await fetch('/api/floor_list');
     data = await res.json();
   } catch (e) {
-    listInner.innerHTML = `<div class="empty">読み込み失敗: ${esc(e.message || e)}</div>`;
+    listInner.innerHTML = `<div class="empty">${DQ7I18N.t('floor.loadFailed')}: ${esc(e.message || e)}</div>`;
     return;
   }
   if (data.error) {
-    listInner.innerHTML = `<div class="empty">エラー: ${esc(data.error)}</div>`;
+    listInner.innerHTML = `<div class="empty">${DQ7I18N.t('common.error')}: ${esc(data.error)}</div>`;
     return;
   }
   allEntries = data.entries || [];
-  subEl.textContent =
-    `${data.source} — ${data.record_count} レコード / SCRIPT ${data.scanned_script_files} ファイル走査 / ` +
-    `MAP_WARP 命令 ${data.total_warp_commands} 件。行クリックで詳細。`;
+  renderSub(data);
   renderList();
+}
+
+let lastListData = null;
+function renderSub(data) {
+  lastListData = data;
+  if (DQ7I18N.getLang() === 'en') {
+    subEl.textContent =
+      `${data.source} — ${data.record_count} records / scanned ${data.scanned_script_files} SCRIPT files / ` +
+      `${data.total_warp_commands} MAP_WARP commands total. Click a row for details.`;
+  } else {
+    subEl.textContent =
+      `${data.source} — ${data.record_count} レコード / SCRIPT ${data.scanned_script_files} ファイル走査 / ` +
+      `MAP_WARP 命令 ${data.total_warp_commands} 件。行クリックで詳細。`;
+  }
 }
 
 function renderList() {
@@ -70,23 +145,23 @@ function renderList() {
     row.dataset.id = e.floor_id;
     const mc = e.mapcode
       ? `<span class="mc">${esc(e.mapcode)}</span>`
-      : `<span class="mc no-mc">(no name)</span>`;
+      : `<span class="mc no-mc">${esc(DQ7I18N.t('floor.noName'))}</span>`;
     const scr = e.script_file
-      ? `<span class="badge has" title="${esc(e.script_file)} が存在">▸SCRIPT</span>`
-      : `<span class="badge" title="対応する SCRIPT/&lt;mapcode&gt;.bin なし">–</span>`;
+      ? `<span class="badge has" title="${esc(e.script_file)} ${esc(DQ7I18N.t('floor.hasScript'))}">▸SCRIPT</span>`
+      : `<span class="badge" title="${esc(DQ7I18N.t('floor.noScriptFile'))}">–</span>`;
     row.innerHTML =
       `<span class="fid">#${e.floor_id}</span>` +
       mc +
       `<span class="grp">g${e.group}</span>` +
       scr +
-      `<span class="badge" title="このフロアを行き先にする MAP_WARP の数">↘${e.warps_in}</span>` +
-      `<span class="badge" title="このフロアのSCRIPT内にある MAP_WARP の数">↗${e.warps_out}</span>`;
+      `<span class="badge" title="${esc(DQ7I18N.t('floor.warpsInTitle'))}">↘${e.warps_in}</span>` +
+      `<span class="badge" title="${esc(DQ7I18N.t('floor.warpsOutTitle'))}">↗${e.warps_out}</span>`;
     row.onclick = () => selectFloor(e.floor_id, row);
     frag.appendChild(row);
   }
   listInner.innerHTML = '';
   if (!shown.length) {
-    listInner.innerHTML = '<div class="empty">該当なし</div>';
+    listInner.innerHTML = `<div class="empty">${DQ7I18N.t('floor.noMatch')}</div>`;
     return;
   }
   listInner.appendChild(frag);
@@ -96,65 +171,79 @@ searchBox.addEventListener('input', renderList);
 function warpLine(w) {
   // "  g/o(tag)/proc #cmd  → <dstname> (#id) @(x,y,z) 向き=.. flag5=.."
   const pos = `(${w.pos.join(', ')})`;
-  const face = w.facing === null || w.facing === undefined ? '' : `  向き=${w.facing}`;
-  const f5 = w.flag5 === null || w.flag5 === undefined ? '' : `  flag5=${w.flag5}`;
+  const face = w.facing === null || w.facing === undefined ? '' : `  ${DQ7I18N.t('floor.facing')}=${w.facing}`;
+  const f5 = w.flag5 === null || w.flag5 === undefined ? '' : `  ${DQ7I18N.t('floor.flag5')}=${w.flag5}`;
   const dst = w.dst_map_name ? `${w.dst_map_name} (#${w.dst_map_id})` : `map#${w.dst_map_id}`;
   return `    g${w.group_idx}/o${w.obj_idx}(${w.obj_tag || '-'})/${w.proc_tag} #${w.cmd_idx}  → ${dst} @${pos}${face}${f5}`;
 }
+
+let lastFloorDetail = null;
 
 async function selectFloor(fid, rowEl) {
   selectedId = fid;
   document.querySelectorAll('.floor-row.selected').forEach(x => x.classList.remove('selected'));
   if (rowEl) rowEl.classList.add('selected');
-  detailEl.textContent = '読み込み中...';
+  detailEl.textContent = DQ7I18N.t('common.loading');
   if (isMobile()) showPane('detail');
   let d;
   try {
     const res = await fetch(`/api/floor_detail?id=${fid}`);
     d = await res.json();
   } catch (e) {
-    detailEl.textContent = `読み込み失敗: ${e.message || e}`;
+    detailEl.textContent = `${DQ7I18N.t('floor.loadFailed')}: ${e.message || e}`;
     return;
   }
   if (d.error) {
-    detailEl.textContent = `エラー: ${d.error}`;
+    detailEl.textContent = `${DQ7I18N.t('common.error')}: ${d.error}`;
     return;
   }
+  lastFloorDetail = d;
+  renderFloorDetail(d);
+}
+
+function renderFloorDetail(d) {
   const r = d.record || {};
+  const t = DQ7I18N.t;
   const lines = [];
-  lines.push(`フロアID #${d.floor_id}`);
-  lines.push(`マップコード : ${r.mapcode || '(名前なし)'}`);
-  lines.push(`group        : ${r.group}`);
-  lines.push(`dq7_floor_list.dat レコード#${r.rec_index}  raw=${r.raw_hex}`);
-  lines.push(`  レイアウト: +0x00 u32=${r.unk0} (未使用) / +0x04 u16=フロアID / +0x06 u16=group / +0x08 char[8]=マップコード`);
+  lines.push(`${t('floor.floorIdLabel')} #${d.floor_id}`);
+  lines.push(`${t('floor.mapcodeLabel')} : ${r.mapcode || t('floor.noNameLabel')}`);
+  lines.push(`${t('floor.groupLabel')}        : ${r.group}`);
+  lines.push(`dq7_floor_list.dat record #${r.rec_index}  raw=${r.raw_hex}`);
+  lines.push(`  ${t('floor.layoutLabel')}: ${t('floor.layoutDesc').replace('+0x00 u32=', `+0x00 u32=${r.unk0} `)}`);
   lines.push('');
-  lines.push(`対応SCRIPTファイル : ${d.script_file || '(なし — SCRIPT/<mapcode>.bin が存在しない)'}`);
+  lines.push(`${t('floor.scriptFileLabel')} : ${d.script_file || t('floor.scriptFileNone')}`);
   lines.push('');
-  lines.push(`── このフロアへ入ってくる MAP_WARP (${d.warps_in.length}件) ──`);
-  lines.push(`   別のフロアのスクリプトが param0=${d.floor_id} で飛んでくる箇所:`);
+  lines.push(`── ${t('floor.warpsInSection')} (${d.warps_in.length}) ──`);
+  lines.push(`   ${t('floor.warpsInSub').replace('%d', d.floor_id)}`);
   if (!d.warps_in.length) {
-    lines.push('  (なし)');
+    lines.push(`  ${t('floor.none')}`);
   } else {
     const byFile = {};
     for (const w of d.warps_in) (byFile[w.file] = byFile[w.file] || []).push(w);
     for (const f of Object.keys(byFile).sort()) {
-      lines.push(`  【${f}】 ${byFile[f].length}件`);
+      lines.push(`  【${f}】 ${byFile[f].length}`);
       for (const w of byFile[f]) lines.push(warpLine(w));
     }
   }
   lines.push('');
-  lines.push(`── このフロアのSCRIPT内にある MAP_WARP (${d.warps_out.length}件) ──`);
+  lines.push(`── ${t('floor.warpsOutSection')} (${d.warps_out.length}) ──`);
   if (!d.script_file) {
-    lines.push('  (対応SCRIPTファイルがないため取得不可)');
+    lines.push(`  ${t('floor.warpsOutUnavailable')}`);
   } else if (!d.warps_out.length) {
-    lines.push('  (なし)');
+    lines.push(`  ${t('floor.none')}`);
   } else {
     for (const w of d.warps_out) lines.push(warpLine(w));
   }
   lines.push('');
-  lines.push('※ MAP_WARP(opcode 0x0001001f) は「有力な仮説・実機未検証」。');
-  lines.push('  詳細は docs/script_opcode_0x1001f_map_warp.md。');
+  lines.push(t('floor.footnote1'));
+  lines.push(t('floor.footnote2'));
   detailEl.textContent = lines.join('\n');
 }
+
+window.addEventListener('dq7lang:change', () => {
+  if (lastListData) renderSub(lastListData);
+  renderList();
+  if (lastFloorDetail) renderFloorDetail(lastFloorDetail);
+});
 
 loadList();

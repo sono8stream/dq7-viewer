@@ -27,9 +27,41 @@ edges and missing features.
 
 ## Usage
 
-To run the viewer you need RomFS/ExeFS data extracted from **a ROM you
-legally own**. This repository does not include extraction tools or steps
-(it assumes you'll place your own extracted data under `rom/`).
+To run the viewer you need RomFS data extracted from **a ROM you legally
+own**. This repository does not include ROM-dumping or RomFS-extraction
+tools or steps.
+
+### Placing your ROM data
+
+At the repository root (the same level as `webapp/`), create a folder
+`rom/extracted/` and put the contents of your extracted RomFS inside it
+as-is, keeping RomFS's original folder names (`SCRIPT/`, `MESS/`,
+`LEVELDATA/`, `CHARACTER/`, `MONSTER/`, `TEXT/`, `MENULIST/`, `TEXTURE/`,
+`MAP/`, etc.).
+
+```
+dq7-viewer/
+├── webapp/
+└── rom/
+    └── extracted/
+        ├── SCRIPT/
+        ├── MESS/
+        ├── LEVELDATA/
+        ├── CHARACTER/
+        ├── MONSTER/
+        ├── TEXT/
+        ├── MENULIST/
+        ├── TEXTURE/
+        ├── MAP/
+        └── ...(and any other RomFS folders, as-is)
+```
+
+`rom/` is already excluded via `.gitignore`, so placing your data there
+won't accidentally get committed. Use existing 3DS ROM tools (e.g. GodMode9,
+CTR-format tools) to dump your cartridge/CIA and extract its RomFS — that
+process itself is not part of this repository.
+
+### Running it
 
 ```
 cd webapp

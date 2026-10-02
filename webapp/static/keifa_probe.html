@@ -6,30 +6,31 @@
 <title>DQ7 キーファ調査プローブ</title>
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="keifa_probe.css">
+<script src="i18n.js"></script>
 </head>
 <body>
 <header>
   <h1>DQ7 Script Viewer</h1>
   <nav>
-    <a href="index.html">スクリプト</a>
-    <a href="fpt.html">FPT</a>
-    <a href="floor.html">フロア</a>
-    <a href="encount.html">エンカウント</a>
-    <a href="item.html">アイテム</a>
-    <a href="character.html">キャラ</a>
-    <a href="model.html">モデル</a>
-    <a href="images.html">画像</a>
-    <a href="save.html">セーブ</a>
-    <a href="keifa_probe.html" class="current">キーファ調査</a>
-    <a href="jidx.html">jidx</a>
+    <a href="index.html" data-i18n="nav.script">スクリプト</a>
+    <a href="fpt.html" data-i18n="nav.fpt">FPT</a>
+    <a href="floor.html" data-i18n="nav.floor">フロア</a>
+    <a href="encount.html" data-i18n="nav.encount">エンカウント</a>
+    <a href="item.html" data-i18n="nav.item">アイテム</a>
+    <a href="character.html" data-i18n="nav.character">キャラ</a>
+    <a href="model.html" data-i18n="nav.model">モデル</a>
+    <a href="images.html" data-i18n="nav.images">画像</a>
+    <a href="save.html" data-i18n="nav.save">セーブ</a>
+    <a href="keifa_probe.html" class="current" data-i18n="nav.keifa_probe">キーファ調査</a>
+    <a href="jidx.html" data-i18n="nav.jidx">jidx</a>
   </nav>
   <span class="kv" id="status"></span>
 </header>
 
 <div id="probeLayout">
   <div class="probe-panel">
-    <h2>キーファ転職アニメ調査 - ライブメモリプローブ</h2>
-    <p class="probe-hint">
+    <h2 data-i18n="keifa.title">キーファ転職アニメ調査 - ライブメモリプローブ</h2>
+    <p class="probe-hint" data-i18n-html="keifa.hint1">
       Azahar(RPCサーバー、config.ini <code>enable_rpc_server=true</code>、UDP:45987)経由で、
       実機のCharacterObject::getMotionIndex内 <code>[CharacterObject+0x98]</code>
       (job×character×motionType探索の「characterキー」)を、ロジックを変更せず
@@ -37,31 +38,31 @@
       <code>docs/keifa_job_animation_investigation.md</code> と
       <code>webapp/dq7_rpc_probe.py</code> を参照。
     </p>
-    <p class="probe-hint">
+    <p class="probe-hint" data-i18n-html="keifa.hint2">
       アドレスはビルド(実験パッチの有無など)ごとにズレるため、「パッチを適用」を押すたびに
       ライブメモリを直接スキャンして対象命令列を再特定してから当てます
       (既に同じ位置にパッチ済みなら何もしません)。
     </p>
 
     <div class="probe-row">
-      <button id="refreshStatusBtn">状態を確認</button>
-      <button id="applyBtn">パッチを適用</button>
-      <button id="rescanBtn">強制的に再スキャンして適用</button>
+      <button id="refreshStatusBtn" data-i18n="keifa.refreshStatus">状態を確認</button>
+      <button id="applyBtn" data-i18n="keifa.applyPatch">パッチを適用</button>
+      <button id="rescanBtn" data-i18n="keifa.rescan">強制的に再スキャンして適用</button>
       <label class="probe-row" style="gap:6px;">
         <input type="checkbox" id="autoPollChk" checked>
-        自動更新(1秒毎)
+        <span data-i18n="keifa.autoPoll">自動更新(1秒毎)</span>
       </label>
     </div>
 
-    <div id="statusBox" class="probe-status">未確認</div>
+    <div id="statusBox" class="probe-status" data-i18n="keifa.unconfirmed">未確認</div>
 
     <table class="probe-log-table">
       <thead>
-        <tr><th>#</th><th>this (CharacterObject)</th><th>[this+0x98] characterキー</th></tr>
+        <tr><th>#</th><th data-i18n="keifa.thisCol">this (CharacterObject)</th><th data-i18n="keifa.charKeyCol">[this+0x98] characterキー</th></tr>
       </thead>
       <tbody id="logBody"></tbody>
     </table>
-    <p class="probe-hint" id="logEmptyMsg">まだ記録がありません。パッチ適用後、実機でキャラを歩かせてください(walk/run/dashの度に1件記録されます。直近16件のリングバッファ)。</p>
+    <p class="probe-hint" id="logEmptyMsg" data-i18n="keifa.logEmpty">まだ記録がありません。パッチ適用後、実機でキャラを歩かせてください(walk/run/dashの度に1件記録されます。直近16件のリングバッファ)。</p>
   </div>
 </div>
 

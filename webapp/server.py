@@ -721,6 +721,15 @@ def parse_encount_data() -> dict:
             return f'(特殊コード {mid})'
         return mon.get(mid, f'#{mid}')
 
+    def mname_en(mid: int) -> str:
+        # モンスター名自体(mon辞書)はROM内蔵のゲームテキストなので翻訳対象外。
+        # 英語で切り替わるのは特殊コードの注記表記のみ。
+        if mid == 0:
+            return ''
+        if 991 <= mid <= 999:
+            return f'(special code {mid})'
+        return mon.get(mid, f'#{mid}')
+
     slot_labels = ['A0', 'A1', 'A2', 'A3', 'A4', 'B0', 'B1', 'B2', 'B3', '+1c']
     records = []
     for i in range(nrec):
@@ -741,9 +750,9 @@ def parse_encount_data() -> dict:
             'zone': zone,
             'region': region,   # 0/1 = そのゾーン内の領域 (南/北 等)
             'maps': zmap.get(zone, []),
-            'arrayA': [{'id': m, 'name': mname(m)} for m in A],
-            'arrayB': [{'id': m, 'name': mname(m)} for m in B],
-            'extra_rare': {'id': x1c, 'name': mname(x1c)},   # +0x1c レア客枠
+            'arrayA': [{'id': m, 'name': mname(m), 'name_en': mname_en(m)} for m in A],
+            'arrayB': [{'id': m, 'name': mname(m), 'name_en': mname_en(m)} for m in B],
+            'extra_rare': {'id': x1c, 'name': mname(x1c), 'name_en': mname_en(x1c)},   # +0x1c レア客枠
             'flee_level': r[0x1e],
             'x1f': r[0x1f],
             'mid': mid,
@@ -751,10 +760,10 @@ def parse_encount_data() -> dict:
             'x2b': r[0x2b], 'x2c': r[0x2c], 'x32': r[0x32],
             'weights1': [
                 {'slot': slot_labels[k], 'id': slot_ids[k],
-                 'name': mname(slot_ids[k]), 'w': w1[k]} for k in range(10)],
+                 'name': mname(slot_ids[k]), 'name_en': mname_en(slot_ids[k]), 'w': w1[k]} for k in range(10)],
             'weights2': [
                 {'slot': slot_labels[k], 'id': slot_ids[k],
-                 'name': mname(slot_ids[k]), 'w': w2[k]} for k in range(10)],
+                 'name': mname(slot_ids[k]), 'name_en': mname_en(slot_ids[k]), 'w': w2[k]} for k in range(10)],
             'is_empty': is_empty,
             'is_special': is_special,
             'raw_hex': r.hex(),
@@ -791,10 +800,26 @@ _ITEM_PARAM_KIND = {
     8: '重要/イベント/カギ',
     9: '石/特殊',
 }
+_ITEM_PARAM_KIND_EN = {
+    0: 'No effect / unused',
+    1: 'Attack',
+    2: 'Defense',
+    3: 'Agility',
+    4: 'Wisdom',
+    5: 'Luck / special accessory (unconfirmed)',
+    6: 'Consumable',
+    7: 'Other consumable',
+    8: 'Key/event item',
+    9: 'Stone/special',
+}
 # +0x2d = 装備スロット/小分類
 _ITEM_SLOT = {
     1: '武器', 2: '体防具', 3: '頭', 4: '脚(?)', 5: 'アクセサリ',
     6: '消耗品', 7: 'カギ', 9: '重要', 11: '重要', 12: '石',
+}
+_ITEM_SLOT_EN = {
+    1: 'Weapon', 2: 'Body armor', 3: 'Head', 4: 'Legs(?)', 5: 'Accessory',
+    6: 'Consumable', 7: 'Key item', 9: 'Important', 11: 'Important', 12: 'Stone',
 }
 
 
@@ -835,8 +860,10 @@ def parse_item_list() -> dict:
             'stat_x28': r[0x28],                 # +0x28 追加ステータス
             'param_kind': pkind,                 # +0x2c 効果対象パラメータ種別
             'param_kind_label': _ITEM_PARAM_KIND.get(pkind, f'? ({pkind})'),
+            'param_kind_label_en': _ITEM_PARAM_KIND_EN.get(pkind, f'? ({pkind})'),
             'slot': slot,                        # +0x2d 装備スロット/小分類
             'slot_label': _ITEM_SLOT.get(slot, f'? ({slot})'),
+            'slot_label_en': _ITEM_SLOT_EN.get(slot, f'? ({slot})'),
             'shop_flags': r[0x33],               # +0x33 ショップ系ビットフィールド
             'raw_hex': r.hex(),
         })
@@ -977,7 +1004,17 @@ _CHAR_INIT_CATEGORY_LABELS = {
     0x28: '特殊8体グループ(id38〜45)',
 }
 
+_CHAR_INIT_CATEGORY_LABELS_EN = {
+    0x08: 'Hero (id1)',
+    0x10: 'Main playable (id2-5)',
+    0x310: 'Main playable (id6, extra bit?)',
+    0x1c: 'NPC/guest with placement data (id7-17)',
+    0x20: 'Name-only placeholder (id18-37)',
+    0x28: 'Special group of 8 (id38-45)',
+}
+
 _CHAR_INIT_GENDER_LABELS = {271: '男性', 272: '女性', 273: 'その他・非人間'}
+_CHAR_INIT_GENDER_LABELS_EN = {271: 'Male', 272: 'Female', 273: 'Other/non-human'}
 
 # ビュアーから編集可能なフィールド一覧。(offset, size, struct_fmt, name)。
 # category_code(+0x92, u16)がプレイアブル初期化と相関している疑い(ユーザー指摘
@@ -1035,8 +1072,10 @@ def parse_character_init_data() -> dict:
             'model': model,
             'category_code': cat,
             'category_label': _CHAR_INIT_CATEGORY_LABELS.get(cat, f'不明(0x{cat:x})'),
+            'category_label_en': _CHAR_INIT_CATEGORY_LABELS_EN.get(cat, f'Unknown(0x{cat:x})'),
             'gender_code': u32(0x4c),
             'gender_label': _CHAR_INIT_GENDER_LABELS.get(u32(0x4c), f'不明({u32(0x4c)})'),
+            'gender_label_en': _CHAR_INIT_GENDER_LABELS_EN.get(u32(0x4c), f'Unknown({u32(0x4c)})'),
             'field_0x6c': u32(0x6c),
             'field_0x74': u32(0x74),
             'base_stats': {

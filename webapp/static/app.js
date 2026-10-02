@@ -1,3 +1,65 @@
+if (window.DQ7I18N) {
+  DQ7I18N.extend({
+    ja: {
+      'editor.editModeOff': '編集モード: OFF',
+      'editor.editModeOn': '編集モード: ON',
+      'editor.historyBtn': '変更履歴',
+      'editor.flagsBtn': '使用フラグ',
+      'editor.searchTextBtn': 'メッセージ検索',
+      'editor.repackBtn': '再パック&Downloadsへ配置',
+      'editor.repacking': 'リパック中...',
+      'editor.repackInProgress': '再パック→検証→Downloadsへコピー中（1〜2分かかります）...',
+      'editor.tabFiles': 'ファイル',
+      'editor.tabTree': 'ツリー',
+      'editor.tabDetail': '詳細',
+      'editor.selCopy': 'コピー',
+      'editor.selIndentInc': 'インデントを深く',
+      'editor.selIndentDec': 'インデントを浅く',
+      'editor.selDelete': '選択を一括削除',
+      'editor.selClear': '選択解除',
+      'editor.pendingSave': '保存',
+      'editor.pendingDiscard': '破棄',
+      'editor.fileSearchPlaceholder': 'ファイル名で絞り込み...',
+      'editor.recentLabel': '最近開いたファイル',
+      'editor.treeEmpty': '左からSCRIPTファイルを選択してください',
+      'editor.detailEmpty': 'コマンドを選択すると詳細が表示されます',
+      'editor.cancel': 'キャンセル',
+      'editor.editThisCommand': 'このコマンドを編集',
+      'editor.reload': '⟳ 再読み込み',
+      'editor.reloadTitle': 'サーバー側の最新の内容を再取得します',
+    },
+    en: {
+      'editor.editModeOff': 'Edit mode: OFF',
+      'editor.editModeOn': 'Edit mode: ON',
+      'editor.historyBtn': 'History',
+      'editor.flagsBtn': 'Flag usage',
+      'editor.searchTextBtn': 'Search messages',
+      'editor.repackBtn': 'Repack & deploy to Downloads',
+      'editor.repacking': 'Repacking...',
+      'editor.repackInProgress': 'Repacking → verifying → copying to Downloads (takes 1-2 min)...',
+      'editor.tabFiles': 'Files',
+      'editor.tabTree': 'Tree',
+      'editor.tabDetail': 'Detail',
+      'editor.selCopy': 'Copy',
+      'editor.selIndentInc': 'Indent +',
+      'editor.selIndentDec': 'Indent -',
+      'editor.selDelete': 'Delete selection',
+      'editor.selClear': 'Clear selection',
+      'editor.pendingSave': 'Save',
+      'editor.pendingDiscard': 'Discard',
+      'editor.fileSearchPlaceholder': 'Filter by filename...',
+      'editor.recentLabel': 'Recently opened files',
+      'editor.treeEmpty': 'Select a SCRIPT file on the left',
+      'editor.detailEmpty': 'Select a command to see its details',
+      'editor.cancel': 'Cancel',
+      'editor.editThisCommand': 'Edit this command',
+      'editor.reload': '⟳ Reload',
+      'editor.reloadTitle': 'Re-fetch the latest content from the server',
+    },
+  });
+}
+const t = (window.DQ7I18N ? DQ7I18N.t : (k, f) => (f !== undefined ? f : k));
+
 const fileListInner = document.getElementById('fileListInner');
 const fileSearch = document.getElementById('fileSearch');
 const treeEl = document.getElementById('tree');
@@ -57,7 +119,7 @@ let clipboardCommands = null;
 
 editModeToggle.addEventListener('click', () => {
   editMode = !editMode;
-  editModeToggle.textContent = `編集モード: ${editMode ? 'ON' : 'OFF'}`;
+  editModeToggle.textContent = t(editMode ? 'editor.editModeOn' : 'editor.editModeOff');
   editModeToggle.classList.toggle('active', editMode);
   if (!editMode) { selectedKeys = new Set(); renderSelectionBar(); }
   if (currentTree) renderTree(currentTree);
@@ -71,14 +133,14 @@ editModeToggle.addEventListener('click', () => {
 repackBtn.addEventListener('click', async () => {
   repackBtn.disabled = true;
   const originalLabel = repackBtn.textContent;
-  repackBtn.textContent = 'リパック中...';
-  repackStatusEl.textContent = '再パック→検証→Downloadsへコピー中（1〜2分かかります）...';
+  repackBtn.textContent = t('editor.repacking');
+  repackStatusEl.textContent = t('editor.repackInProgress');
   repackStatusEl.style.color = '';
   try {
     const res = await fetch('/api/repack', { method: 'POST' });
     const data = await res.json();
     if (!data.ok) {
-      repackStatusEl.textContent = `失敗 (${data.stage || 'unknown'}): ${data.error || (data.stderr || '').slice(0, 200)}`;
+      repackStatusEl.textContent = `${t('common.error')} (${data.stage || 'unknown'}): ${data.error || (data.stderr || '').slice(0, 200)}`;
       repackStatusEl.style.color = '#e88080';
     } else {
       const mb = (data.size / 1024 / 1024).toFixed(1);
@@ -86,7 +148,7 @@ repackBtn.addEventListener('click', async () => {
       repackStatusEl.style.color = '#9fd18a';
     }
   } catch (e) {
-    repackStatusEl.textContent = `エラー: ${e.message || e}`;
+    repackStatusEl.textContent = `${t('common.error')}: ${e.message || e}`;
     repackStatusEl.style.color = '#e88080';
   } finally {
     repackBtn.disabled = false;
@@ -219,12 +281,12 @@ async function selectFile(name) {
   renderPendingBar();
   selectedKeys = new Set(); // keys are tree-specific; clipboardCommands intentionally persists across files
   renderSelectionBar();
-  treeEl.innerHTML = '<div class="empty">読み込み中...</div>';
-  detailEl.innerHTML = '<div class="empty">コマンドを選択すると詳細が表示されます</div>';
+  treeEl.innerHTML = `<div class="empty">${t('common.loading')}</div>`;
+  detailEl.innerHTML = `<div class="empty">${t('editor.detailEmpty')}</div>`;
   const res = await fetch(`/api/parse?file=${encodeURIComponent(name)}`);
   const tree = await res.json();
   if (tree.error) {
-    treeEl.innerHTML = `<div class="empty">エラー: ${tree.error}</div>`;
+    treeEl.innerHTML = `<div class="empty">${t('common.error')}: ${tree.error}</div>`;
     return;
   }
   currentTree = tree;
@@ -284,9 +346,9 @@ function renderTree(tree) {
   // 明示的な再読み込みボタンを追加。
   const reloadBtn = document.createElement('button');
   reloadBtn.className = 'secondary';
-  reloadBtn.textContent = '⟳ 再読み込み';
+  reloadBtn.textContent = t('editor.reload');
   reloadBtn.style.flex = '0 0 auto';
-  reloadBtn.title = 'サーバー側の最新の内容を再取得します';
+  reloadBtn.title = t('editor.reloadTitle');
   reloadBtn.onclick = () => { if (currentFileName) selectFile(currentFileName); };
   header.appendChild(reloadBtn);
   treeEl.appendChild(header);
@@ -854,7 +916,7 @@ function showAddObjectForm(defaults) {
       });
       const data = await res.json();
       if (!data.ok) {
-        msgEl.textContent = `エラー: ${data.error || 'unknown'}` + (data.anomalies ? `\n${JSON.stringify(data.anomalies)}` : '');
+        msgEl.textContent = `${t('common.error')}: ${data.error || 'unknown'}` + (data.anomalies ? `\n${JSON.stringify(data.anomalies)}` : '');
         msgEl.className = 'edit-msg error';
         return;
       }
@@ -871,7 +933,7 @@ function showAddObjectForm(defaults) {
         await reloadCurrentFile();
       }
     } catch (err) {
-      msgEl.textContent = `エラー: ${err.message || err}`;
+      msgEl.textContent = `${t('common.error')}: ${err.message || err}`;
       msgEl.className = 'edit-msg error';
     }
   };
@@ -926,7 +988,7 @@ async function saveNpcField(groupIdx, objIdx, fieldOffset, valueType, rawValue, 
     });
     const data = await res.json();
     if (!data.ok) {
-      msgEl.textContent = `エラー: ${data.error || 'unknown'}`;
+      msgEl.textContent = `${t('common.error')}: ${data.error || 'unknown'}`;
       msgEl.className = 'edit-msg error';
       return;
     }
@@ -941,7 +1003,7 @@ async function saveNpcField(groupIdx, objIdx, fieldOffset, valueType, rawValue, 
     const f = (o.npc_placement && o.npc_placement.fields.find(fl => fl.offset === fieldOffset)) || null;
     showObjectDetail(o, f);
   } catch (e) {
-    msgEl.textContent = `エラー: ${e.message || e}`;
+    msgEl.textContent = `${t('common.error')}: ${e.message || e}`;
     msgEl.className = 'edit-msg error';
   }
 }
@@ -1117,7 +1179,7 @@ function showCommandDetail(c, o, p, ci) {
     const editBtn = document.createElement('button');
     editBtn.className = 'mode-btn';
     editBtn.style.marginTop = '10px';
-    editBtn.textContent = 'このコマンドを編集';
+    editBtn.textContent = t('editor.editThisCommand');
     editBtn.onclick = () => openCommandEditor(g_forDetail, o, p, ci, c);
     detailEl.appendChild(editBtn);
   }
@@ -1492,8 +1554,8 @@ function renderEditForm({ title, g, o, p, startIdx, endIdx, rows, submitLabel })
   };
   const cancelBtn = document.createElement('button');
   cancelBtn.className = 'secondary';
-  cancelBtn.textContent = 'キャンセル';
-  cancelBtn.onclick = () => { detailEl.innerHTML = '<div class="empty">コマンドを選択すると詳細が表示されます</div>'; };
+  cancelBtn.textContent = t('editor.cancel');
+  cancelBtn.onclick = () => { detailEl.innerHTML = `<div class="empty">${t('editor.detailEmpty')}</div>`; };
   actions.appendChild(saveBtn);
   actions.appendChild(cancelBtn);
   form.appendChild(actions);
@@ -1514,7 +1576,7 @@ async function submitCommandsEdit(g, o, p, startIdx, endIdx, commands, comment, 
     });
     const data = await res.json();
     if (!data.ok) {
-      const text = `エラー: ${data.error || 'unknown'}${data.anomalies ? '\n' + data.anomalies.join('\n') : ''}`;
+      const text = `${t('common.error')}: ${data.error || 'unknown'}${data.anomalies ? '\n' + data.anomalies.join('\n') : ''}`;
       if (msgEl) { msgEl.className = 'edit-msg error'; msgEl.textContent = text; }
       else alert(text);
       return;
@@ -1526,7 +1588,7 @@ async function submitCommandsEdit(g, o, p, startIdx, endIdx, commands, comment, 
     }
     statusEl.textContent = successMsg || `保存しました (${data.old_size} -> ${data.new_size} bytes)`;
   } catch (e) {
-    const text = `エラー: ${e.message || e}`;
+    const text = `${t('common.error')}: ${e.message || e}`;
     if (msgEl) { msgEl.className = 'edit-msg error'; msgEl.textContent = text; }
     else alert(text);
   }
@@ -1586,7 +1648,7 @@ async function stageEdit(g, o, p, startIdx, endIdx, commands, comment, msgEl) {
     });
     const data = await res.json();
     if (!data.ok) {
-      const text = `エラー: ${data.error || 'unknown'}${data.anomalies ? '\n' + data.anomalies.join('\n') : ''}`;
+      const text = `${t('common.error')}: ${data.error || 'unknown'}${data.anomalies ? '\n' + data.anomalies.join('\n') : ''}`;
       if (msgEl) { msgEl.className = 'edit-msg error'; msgEl.textContent = text; }
       else alert(text);
       return false;
@@ -1615,7 +1677,7 @@ async function stageEdit(g, o, p, startIdx, endIdx, commands, comment, msgEl) {
     }
     return true;
   } catch (e) {
-    const text = `エラー: ${e.message || e}`;
+    const text = `${t('common.error')}: ${e.message || e}`;
     if (msgEl) { msgEl.className = 'edit-msg error'; msgEl.textContent = text; }
     else alert(text);
     return false;
@@ -1635,7 +1697,7 @@ async function commitPendingEdits() {
   });
   const data = await res.json();
   if (!data.ok) {
-    pendingBarStatusEl.textContent = `エラー: ${data.error || 'unknown'}${data.anomalies ? '\n' + data.anomalies.join('\n') : ''}`;
+    pendingBarStatusEl.textContent = `${t('common.error')}: ${data.error || 'unknown'}${data.anomalies ? '\n' + data.anomalies.join('\n') : ''}`;
     pendingBarStatusEl.style.color = '#e88080';
     return;
   }
@@ -1973,7 +2035,7 @@ async function showSearchTextPanel() {
       const data = await res.json();
       renderSearchTextResults(resultsWrap, data);
     } catch (e) {
-      resultsWrap.innerHTML = `<div class="empty">エラー: ${e.message || e}</div>`;
+      resultsWrap.innerHTML = `<div class="empty">${t('common.error')}: ${e.message || e}</div>`;
     } finally {
       btn.disabled = false;
     }
@@ -1987,7 +2049,7 @@ async function showSearchTextPanel() {
 function renderSearchTextResults(wrap, data) {
   wrap.innerHTML = '';
   if (data.error) {
-    wrap.appendChild(Object.assign(document.createElement('div'), { className: 'empty', textContent: `エラー: ${data.error}` }));
+    wrap.appendChild(Object.assign(document.createElement('div'), { className: 'empty', textContent: `${t('common.error')}: ${data.error}` }));
     return;
   }
   const results = data.results || [];
@@ -2180,7 +2242,7 @@ async function showHistoryPanel() {
         e.comment = commentInput.value;
         commentSaveMsg.textContent = '保存しました';
       } catch (err) {
-        commentSaveMsg.textContent = `エラー: ${err.message || err}`;
+        commentSaveMsg.textContent = `${t('common.error')}: ${err.message || err}`;
       }
     };
     commentWrap.appendChild(commentInput);
@@ -2215,7 +2277,7 @@ async function showHistoryPanel() {
         e.result_comment = rcInput.value;
         rcSaveMsg.textContent = '保存しました';
       } catch (err) {
-        rcSaveMsg.textContent = `エラー: ${err.message || err}`;
+        rcSaveMsg.textContent = `${t('common.error')}: ${err.message || err}`;
       }
     };
     resultWrap.appendChild(rcInput);
@@ -2265,7 +2327,7 @@ async function showHistoryPanel() {
       });
       const data = await r.json();
       if (!data.ok) {
-        alert(`エラー: ${data.error || 'unknown'}`);
+        alert(`${t('common.error')}: ${data.error || 'unknown'}`);
         return;
       }
       await reloadCurrentFile();
@@ -2330,5 +2392,14 @@ function escapeHtml(s) {
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   }[ch]));
 }
+
+window.addEventListener('dq7lang:change', () => {
+  renderFileList();
+  renderRecentList();
+  renderPendingBar();
+  renderSelectionBar();
+  if (currentTree) renderTree(currentTree);
+  editModeToggle.textContent = t(editMode ? 'editor.editModeOn' : 'editor.editModeOff');
+});
 
 loadFiles();

@@ -1,3 +1,24 @@
+DQ7I18N.extend({
+  ja: {
+    'fpt.tabFiles': 'ファイル',
+    'fpt.tabEntries': 'エントリ',
+    'fpt.tabDetail': '詳細',
+    'fpt.searchPlaceholder': 'ファイル名で絞り込み...',
+    'fpt.selectFilePrompt': '左から.fptファイルを選択してください',
+    'fpt.selectEntryPrompt': 'エントリを選択すると詳細が表示されます',
+    'fpt.streamGap': 'ストリームの区切り目/ギャップ',
+  },
+  en: {
+    'fpt.tabFiles': 'Files',
+    'fpt.tabEntries': 'Entries',
+    'fpt.tabDetail': 'Detail',
+    'fpt.searchPlaceholder': 'Filter by file name...',
+    'fpt.selectFilePrompt': 'Select a .fpt file from the left',
+    'fpt.selectEntryPrompt': 'Select an entry to see its details',
+    'fpt.streamGap': 'stream boundary / gap',
+  },
+});
+
 const fileListInner = document.getElementById('fileListInner');
 const fileSearch = document.getElementById('fileSearch');
 const treeEl = document.getElementById('tree');
@@ -51,12 +72,12 @@ fileSearch.addEventListener('input', renderFileList);
 async function selectFile(name, el) {
   document.querySelectorAll('.file-item.active').forEach(x => x.classList.remove('active'));
   if (el) el.classList.add('active');
-  treeEl.innerHTML = '<div class="empty">読み込み中...</div>';
-  detailEl.innerHTML = '<div class="empty">エントリを選択すると詳細が表示されます</div>';
+  treeEl.innerHTML = `<div class="empty">${DQ7I18N.t('common.loading')}</div>`;
+  detailEl.innerHTML = `<div class="empty">${DQ7I18N.t('fpt.selectEntryPrompt')}</div>`;
   const res = await fetch(`/api/fpt_parse?file=${encodeURIComponent(name)}`);
   const parsed = await res.json();
   if (parsed.error) {
-    treeEl.innerHTML = `<div class="empty">エラー: ${parsed.error}</div>`;
+    treeEl.innerHTML = `<div class="empty">${DQ7I18N.t('common.error')}: ${parsed.error}</div>`;
     return;
   }
   currentParsed = parsed;
@@ -99,7 +120,7 @@ function showEntryDetail(e, i) {
   lines.push(`msg_count (bytes): ${e.msg_count}`);
   lines.push(`true_offset + msg_count: ${e.true_offset + e.msg_count}`);
   lines.push(`contiguous with previous entry: ${e.contiguous_with_prev}` +
-    (i > 0 && !e.contiguous_with_prev ? '  <- ストリームの区切り目/ギャップ' : ''));
+    (i > 0 && !e.contiguous_with_prev ? `  <- ${DQ7I18N.t('fpt.streamGap')}` : ''));
 
   detailEl.innerHTML = '';
   const pre = document.createElement('div');
@@ -146,5 +167,9 @@ function previewLabel(text) {
   }
   return (fallback || text.replace(/�/g, '')).slice(0, 40);
 }
+
+window.addEventListener('dq7lang:change', () => {
+  if (currentParsed) renderEntries(currentParsed);
+});
 
 loadFiles();
