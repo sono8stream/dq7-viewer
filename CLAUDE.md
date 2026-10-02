@@ -13,6 +13,16 @@
 - Webビューアの文言変更（`webapp/static/*.html`の`data-i18n`要素、各`*.js`内の
   `DQ7I18N.extend({ja:{...}, en:{...}})`辞書）も、ja/enのキーを必ずペアで追加・修正する。
 
+## `webapp/`は`script/*.py`・`lz11_decompress.py`（リポジトリ直下）に依存している
+
+`webapp/server.py`は起動時に`script_viewer.py`/`splice_procedure.py`/
+`verify_script_structure.py`（`script/`配下）と`lz11_decompress.py`（リポジトリ
+直下）をimportする。これらはゲームデータを含まない純粋なコードなので公開に
+問題はないが、**dq7-tools側の`webapp/`を丸ごとコピーして同期するだけではこれら
+3+1ファイルが同期されない**（`script/`配下は通常dq7-tools側のsample_data等を
+含むため同期対象外にしているため）。`webapp/`を更新したら、この4ファイルが
+dq7-tools側の対応ファイルと食い違っていないかも都度確認すること。
+
 ## これは何でないか
 
 - ROM・CIA・セーブデータそのものは含まれない。
