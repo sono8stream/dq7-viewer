@@ -1577,7 +1577,14 @@ def _decode_command(raw: bytes) -> dict:
         out['pos_x'] = round(struct.unpack('<f', struct.pack('<I', params[0]))[0], 4)
         out['pos_y'] = round(struct.unpack('<f', struct.pack('<I', params[1]))[0], 4)
         out['pos_z'] = round(struct.unpack('<f', struct.pack('<I', params[2]))[0], 4)
-    elif opcode == OBJECT_TOGGLE_OPCODE and len(params) >= 1:
+    elif (opcode & 0xFFFF) == (OBJECT_TOGGLE_OPCODE & 0xFFFF) and len(params) >= 1:
+        # 【確定 2026-10-04】OBJECT_TOGGLEもhigh16(0x0001/0x0003)の対象になりうる
+        # ことを実機検証用NPCの作成中に確認した(docs/battle_start_opcode_
+        # investigation.mdの「実機検証用テストNPCの設置」節参照) - IF_TALKED_TO
+        # 直下の最後のコマンドとして0x00030005を使うと、話しかけ直すたびに毎回
+        # OBJECT_TOGGLEが再実行される(=何度でも対象objectを有効化し直せる)。
+        # 以前はOBJECT_TOGGLE_OPCODE(0x00010005)との完全一致でしか認識しておらず
+        # high16違いが`op_00030005`としてしか表示されなかった。
         out['name'] = 'OBJECT_TOGGLE'
         out['target_object_idx'] = params[0] + 1
     elif opcode == MAP_WARP_OPCODE and len(params) >= 4:

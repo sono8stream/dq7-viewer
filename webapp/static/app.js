@@ -1083,9 +1083,13 @@ function showCommandDetail(c, o, p, ci) {
     lines.push(`  その書き込み先flag_idはこのコマンド自身のparamsではなく、スクリプト上で直後に置かれたコマンドの生バイト列`);
     lines.push(`  (opcode下位byteとparam[0])を読んで得ている - 実データでは直後に必ずIF_FLAG(2, flag_id, 1)が続き、`);
     lines.push(`  戦闘後にそのflag_idで勝敗分岐する定型パターンになっている。`);
-    lines.push(`  全ROM走査でIF_TALKED_TOの子ブランチとして使われている例は0件 - 話しかけて戦闘になるNPCは、`);
-    lines.push(`  このコマンド自体をIF_TALKED_TOで囲むのではなく、別オブジェクトの会話シーケンス側でOBJECT_TOGGLE等により`);
-    lines.push(`  このscriptobjectを有効化し、有効化後のexecuteプロシージャの先頭(indent 0)で無条件実行する構成を取る。`);
+    lines.push(`  全ROM走査でIF_TALKED_TOの子ブランチ(他のいかなる分岐の子)として使われている例は0件 - 実例は全て`);
+    lines.push(`  各プロシージャのトップレベル(indent 0)に無条件で置かれている。【実機検証済み2026-10-04】`);
+    lines.push(`  IF_TALKED_TOの直下(indent1)に直接置いたところ、話しかけても一切反応が無かった(メッセージも戦闘も`);
+    lines.push(`  発生しない) - ROM中に前例の無い組み合わせだったことと符合する。話しかけて戦闘になるNPCは、`);
+    lines.push(`  このコマンド自体をIF_TALKED_TOで囲むのではなく、別の見える側のNPCのIF_TALKED_TO分岐からOBJECT_TOGGLEで`);
+    lines.push(`  このscriptobjectを有効化し、有効化後のそのobject自身がトップレベル(indent 0)で無条件実行する、という`);
+    lines.push(`  2オブジェクトの間接構成を取る。`);
     lines.push(`  詳細: docs/battle_start_opcode_investigation.md`);
   }
   if (c.name === 'ADD_PARTY_MEMBER') {
@@ -1307,6 +1311,7 @@ const _KNOWN_PARAM_TYPES = {
   '0x00010096': { prefix: ['u32', 'u32', 'u32'], rest: 'u32' },   // FANFARE_MSG (旧称JOIN_BANNER、2026-09-30訂正: 仲間加入専用ではなくアイテム入手等でも使われる汎用ジングルメッセージ)
   '0x00010014': { prefix: ['f32', 'f32', 'f32'], rest: 'u32' },   // SET_POSITION (仮説、2026-08-27)
   '0x00010005': { prefix: ['u32'], rest: 'u32' },                 // OBJECT_TOGGLE (確定、2026-08-30)
+  '0x00030005': { prefix: ['u32'], rest: 'u32' },                 // OBJECT_TOGGLE (high16=0x0003版、確定2026-10-04): 話しかけ直すたびに毎回有効化し直したい場合に使う
   '0x0001001f': { prefix: ['u32', 'f32', 'f32', 'f32', 'u32', 'u32'], rest: 'u32' },  // MAP_WARP (有力な仮説、2026-08-31): [dst_floor_id, x, y, z, facing?, flag?]
   '0x0000000f': { prefix: ['u32'], rest: 'u32' },                 // IF_TALKED_TO (確定、2026-08-28)
   '0x00000070': { prefix: ['u32', 'u32'], rest: 'u32' },          // IF_KO_STATUS (確定、2026-09-29): [character_id, mode(1=戦闘不能で分岐/0=生存で分岐)]
