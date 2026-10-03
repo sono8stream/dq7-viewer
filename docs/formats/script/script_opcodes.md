@@ -117,6 +117,47 @@ Entries where the coordinates are all `(0,0,0)` (possibly special objects
 with no physical placement, such as ones dedicated to triggering dialogue)
 are treated as low confidence.
 
+## Opcode Encoding and the Generic "Once / Repeats" Mechanism
+
+Every opcode is a 32-bit value split into two independent 16-bit fields:
+`(high16 << 16) | low16`. Across the entire ROM, `low16` is the command
+subtype (one of 236 values, see below) and `high16` only ever takes the
+values `0x0000` (condition/branch primitives such as `IF_FLAG`/`IF_TALKED_TO`),
+`0x0001`, or `0x0003`.
+
+This has been confirmed from the executable code (`rom/exefs/code.decompressed.bin`):
+
+- The generic per-command dispatcher `script::CommandFunction` reads only
+  the **low 16 bits** (a single `ldrh` halfword load) and uses it directly
+  as a 236-entry jump-table index to reach the handler for that command
+  subtype. `high16` is never read at dispatch time.
+- Each handler then calls the shared `ScriptCommand::exec` state machine,
+  passing the absolute address of the opcode word itself (inside the
+  script file's `block3` bytes) as the "instance" pointer. `ScriptCommand::exec`
+  treats **byte offset +2 of that same opcode word** (i.e. the low byte of
+  `high16`, since the format is little-endian) as a mutable run-time status
+  byte, OR-ing in bits `0x10` (in progress) and `0x40` (finished) as
+  execution proceeds. Because `0x01` and `0x03` both have bit `0x01` set,
+  and `0x10`/`0x40` never collide with `0x01`/`0x02`, the original authored
+  `high16` value survives alongside the run-time bits.
+- `siren::GetScriptCommandClearFlag` reads exactly bit `0x02` of that byte —
+  i.e. whether `high16` was originally `0x0003` rather than `0x0001`.
+  `ScriptTree::recursiveTree` calls this once a node's execution finishes;
+  if it's true, it calls `siren::ClearScriptCommandStatus` (`status &= ~0x50`),
+  which clears the "in progress"/"finished" bits while leaving the original
+  `0x01`/`0x03` byte intact, allowing that exact command to run again from
+  scratch the next time its branch is re-entered (e.g. the next time the
+  NPC is talked to). If it's false (`high16 == 0x0001`), the finished bit is
+  never cleared, so the command silently no-ops on every subsequent visit.
+
+In short: **`high16 = 0x0001` means "run once, never again"; `high16 = 0x0003`
+means "re-run every time this branch is re-entered."** This is a single
+generic mechanism at the engine level (not per command-subtype code), so in
+principle any `low16` command subtype could use either `high16` value; the
+fact that only a minority of subtypes are observed with `0x0003` in practice
+(see the MSG family and `SET_FLAG` rows below) simply reflects how the game's
+authors actually used it, not an engine restriction.
+
 ## Confirmed Opcode List
 
 | opcode | name | parameters | meaning | status |
@@ -125,9 +166,9 @@ are treated as low confidence.
 | `0x0000000f` | `IF_TALKED_TO` | `[variant]` | branch condition that becomes true when talked to. A standard pattern placed at the start (#0) of almost every NPC's `execute` procedure. variant=0 in the vast majority of cases (meaning of 1,2 unconfirmed) | confirmed |
 | `0x00000070` | `IF_KO_STATUS` | `[character_id, mode]` | checks whether the given character is alive/dead. mode=0 branches on "when alive", mode=1 on "when incapacitated" | confirmed |
 | `0x00010004` | `SET_FLAG` (generic write mid-branch) | `[type, flag_id, value]` | writes a flag. Same (type, id) space as `IF_FLAG` | confirmed |
-| `0x00030004` | `SET_FLAG` (branch-end marker) | `[type, flag_id, value]` | almost always called at the very end of an if/elseif block, with the value almost always 1. Used as a "this event branch has been executed" completion marker | confirmed (statistically supported) |
+| `0x00030004` | `SET_FLAG` (branch-end marker) | `[type, flag_id, value]` | almost always called at the very end of an if/elseif block, with the value almost always 1. Used as a "this event branch has been executed" completion marker. `high16=0x0003` here means this specific `SET_FLAG` invocation itself re-runs every time the branch is re-entered (see "Opcode Encoding..." above); it does not by itself explain the marker's game-logic role, which still comes from the `(type, flag_id)` it writes | confirmed (statistically supported; `high16` mechanism confirmed from code) |
 | `0x00010005` | `OBJECT_TOGGLE` | `[target_index]` | toggles the display on/off of "the (target_index+1)-th object" within the same group. An object merely being counted in `obj_count` does not make it display automatically; explicit activation via this command is required | confirmed (verified on real hardware) |
-| `0x00010009`/`0x00030009` etc., the MSG family (low byte is `0x07`/`0x09`/`0x0a`/`0x0b`/`0x0d`/`0x0e`) | message display | `[msgID, count, ...]` | the opcode's meaning runs along two orthogonal axes: the low byte is the command subtype (a difference in display form; e.g. `0x07`/`0x09` share the same display form but differ in "whether the speaker faces the player (0x09) or not (0x07)"), and the upper 16 bits (`0x0001`/`0x0003`) control execution frequency (`0x0001` = once per scene, `0x0003` = replayed every time you talk). Across a full-ROM check, 99.5% of `repeats` (every time) instances are inside an `IF_TALKED_TO` branch, and nearly 100% of `once` instances are outside it — a confirmed design tendency | confirmed (verified on real hardware) |
+| `0x00010009`/`0x00030009` etc., the MSG family (low16 is `0x0007`/`0x0009`/`0x000a`/`0x000b`/`0x000d`/`0x000e`) | message display | `[msgID, count, ...]` | the opcode's meaning runs along two orthogonal axes: `low16` is the command subtype (a difference in display form; e.g. `0x0007`/`0x0009` share the same display form but differ in "whether the speaker faces the player (`0x0009`) or not (`0x0007`)"), and `high16` (`0x0001`/`0x0003`) controls execution frequency via the generic engine mechanism described above (`0x0001` = once per scene, `0x0003` = replayed every time you talk). Across a full-ROM check, 99.5% of `repeats` (every time) instances are inside an `IF_TALKED_TO` branch, and nearly 100% of `once` instances are outside it — a confirmed design tendency | confirmed (verified on real hardware; `high16` mechanism confirmed from code) |
 | `0x00010014` | `SET_POSITION` | roughly `[0, x(f32), z(f32)]` (details unconfirmed) | presumed to be a command that dynamically places a target at given coordinates. There are real examples where it outputs coordinates matching the confirmed x/y/z values of the NPC placement block | semi-confirmed (hypothesis from matching bit patterns, not verified on real hardware) |
 | `0x00010022`/`0x00010023` | `ADD_PARTY_MEMBER`/`REMOVE_PARTY_MEMBER` | `[character_id, mode]` | mode=0 adds the given character to the party (formation array, fixed at 6 slots), mode≠0 removes them. Removal calls the native implementation `PlayerParty::delMember` (linearly scans the 6 slots, zeroes the target, and compacts by shifting subsequent nonzero elements forward). The engine has absolutely no safeguard such as a zero-member check or exclusion of specific characters | confirmed (both addition and removal backed by both real-hardware and real-data evidence) |
 | `0x00010025` | `CONFIRM_YESNO` | `[var_type, var_id, cancel_value]` | shows a yes/no confirmation prompt and writes the result into flag(var_type, var_id) | confirmed (extensive usage across the full ROM) |
