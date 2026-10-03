@@ -130,7 +130,8 @@ def main():
     ap.add_argument('--limit', type=int, default=0, help='only check the first N files (0 = all)')
     args = ap.parse_args()
 
-    root = os.path.join(_HERE, '..', 'rom', 'extracted')
+    rom_dir = os.environ.get('DQ7_ROM_DIR') or os.path.join(_HERE, '..', 'rom')
+    root = os.path.join(rom_dir, 'extracted')
     dirs = ['CHARACTER', 'MONSTER'] if args.dir == 'both' else [args.dir]
     paths = []
     for d in dirs:

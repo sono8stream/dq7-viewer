@@ -50,7 +50,8 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
 import bcmdl  # noqa: E402
 
-_EXTRACTED = os.path.join(_HERE, '..', 'rom', 'extracted')
+_ROM_DIR = os.environ.get('DQ7_ROM_DIR') or os.path.join(_HERE, '..', 'rom')
+_EXTRACTED = os.path.join(_ROM_DIR, 'extracted')
 
 
 def _path(rel):

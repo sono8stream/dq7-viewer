@@ -20,7 +20,8 @@ import threading
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.abspath(os.path.join(_HERE, '..'))
-_ROMFS = os.path.join(_ROOT, 'rom', 'extracted')
+_ROM_DIR = os.environ.get('DQ7_ROM_DIR') or os.path.join(_ROOT, 'rom')
+_ROMFS = os.path.join(_ROM_DIR, 'extracted')
 
 import sys
 for _p in (_HERE, _ROOT):

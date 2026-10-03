@@ -61,6 +61,14 @@ won't accidentally get committed. Use existing 3DS ROM tools (e.g. GodMode9,
 CTR-format tools) to dump your cartridge/CIA and extract its RomFS — that
 process itself is not part of this repository.
 
+If you'd rather keep your extracted RomFS somewhere else (e.g. shared with
+another checkout), set the `DQ7_ROM_DIR` environment variable to that `rom/`
+folder's path instead of placing it under the repository:
+
+```
+DQ7_ROM_DIR=/path/to/your/rom python3 server.py
+```
+
 ### Running it
 
 ```

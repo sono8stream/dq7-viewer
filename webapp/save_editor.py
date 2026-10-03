@@ -58,7 +58,8 @@ import os
 import struct
 
 _ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-_PARTY_MENU_PATH = os.path.join(_ROOT, 'rom', 'extracted', 'MENULIST', 'party_menu.txt')
+_ROM_DIR = os.environ.get('DQ7_ROM_DIR') or os.path.join(_ROOT, 'rom')
+_PARTY_MENU_PATH = os.path.join(_ROM_DIR, 'extracted', 'MENULIST', 'party_menu.txt')
 
 CHECKSUM_START = 0x10
 

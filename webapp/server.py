@@ -53,11 +53,14 @@ _ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 # cache with no request ever reaching the server).
 _ASSET_VERSION = str(int(time.time()))
 _SCRIPT_DIR = os.path.join(_ROOT, 'script')
-_ROMFS_DIR = os.path.join(_ROOT, 'rom', 'extracted')
-_SCRIPT_FILES_DIR = os.path.join(_ROOT, 'rom', 'extracted', 'SCRIPT')
-_SCRIPT_EDIT_BACKUP_DIR = os.path.join(_ROOT, 'rom', 'script_edit_backups')
-_MESS_DIR = os.path.join(_ROOT, 'rom', 'extracted', 'MESS')
-_LEVELDATA_DIR = os.path.join(_ROOT, 'rom', 'extracted', 'LEVELDATA')
+# rom/ の実体は環境変数 DQ7_ROM_DIR で差し替え可能（未指定時は <リポジトリ直下>/rom）。
+# 複数のチェックアウト(作業用/公開用)で同じ抽出済みROMデータを共有したい場合に使う。
+_ROM_DIR = os.environ.get('DQ7_ROM_DIR') or os.path.join(_ROOT, 'rom')
+_ROMFS_DIR = os.path.join(_ROM_DIR, 'extracted')
+_SCRIPT_FILES_DIR = os.path.join(_ROMFS_DIR, 'SCRIPT')
+_SCRIPT_EDIT_BACKUP_DIR = os.path.join(_ROM_DIR, 'script_edit_backups')
+_MESS_DIR = os.path.join(_ROMFS_DIR, 'MESS')
+_LEVELDATA_DIR = os.path.join(_ROMFS_DIR, 'LEVELDATA')
 _STATIC_DIR = os.path.join(os.path.dirname(__file__), 'static')
 
 
@@ -1033,7 +1036,7 @@ def parse_character_init_data() -> dict:
     nrec, rsize, nrec2 = struct.unpack_from('<3i', data, 4)
     names_by_id = {}
     try:
-        party_menu_path = os.path.join(_ROOT, 'rom', 'extracted', 'MENULIST', 'party_menu.txt')
+        party_menu_path = os.path.join(_ROMFS_DIR, 'MENULIST', 'party_menu.txt')
         with open(party_menu_path, encoding='utf-8') as f:
             for line in f:
                 line = line.strip()
@@ -1105,7 +1108,7 @@ def parse_person_jidx() -> dict:
     両方で提示するビュアー用パーサ。構造は未確定のため、断定的なフィールド名は
     付けず raw な (a,b,c) の組と、その値がどのレコードのオフセットとして
     解釈できるかの相互参照だけを提供する。"""
-    path = os.path.join(_ROOT, 'rom', 'extracted', 'CHARACTER', 'person.jidx')
+    path = os.path.join(_ROMFS_DIR, 'CHARACTER', 'person.jidx')
     data = open(path, 'rb').read()
     size = len(data)
     rec_size = 6
@@ -1141,7 +1144,7 @@ def parse_person_jidx() -> dict:
     }
 
 
-_CHAR_INIT_EDIT_BACKUP_DIR = os.path.join(_ROOT, 'rom', 'leveldata_edit_backups')
+_CHAR_INIT_EDIT_BACKUP_DIR = os.path.join(_ROM_DIR, 'leveldata_edit_backups')
 
 
 def edit_character_init_field(index: int, field: str, value, comment: str = '') -> dict:
@@ -2997,14 +3000,14 @@ def commit_batch_edits(filename: str, new_data: bytes, ops: list, comment: str =
 _REPACK_TITLE_ID_MARKER = '0004000000065E00'  # DQ7's 3DS title ID, used to
 # pick out the original CIA from rom/ (which also accumulates repack
 # test outputs) without hardcoding a full filename.
-_REPACK_OUTPUT = os.path.join(_ROOT, 'rom', 'webapp_repack_output.cia')
+_REPACK_OUTPUT = os.path.join(_ROM_DIR, 'webapp_repack_output.cia')
 _DOWNLOADS_DIR = os.path.expanduser('~/storage/downloads/dq7')
 _DOWNLOADS_TARGET = os.path.join(_DOWNLOADS_DIR, 'game_test.cia')
 _CIA_REPACK_SCRIPT = os.path.join(_ROOT, 'cia_repack.py')
 
 
 def _find_original_cia() -> str:
-    rom_dir = os.path.join(_ROOT, 'rom')
+    rom_dir = _ROM_DIR
     for name in sorted(os.listdir(rom_dir)):
         if name.endswith('.cia') and _REPACK_TITLE_ID_MARKER in name:
             return name
