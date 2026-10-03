@@ -39,6 +39,15 @@ import sys
 import types
 
 _ROOT = os.path.join(os.path.dirname(__file__), '..')
+# rom/ の実体は環境変数DQ7_ROM_DIRで差し替え可能（webapp/server.pyと同じ規約に
+# 揃える - 2026-10-04確定: 以前はこのファイルの3箇所が_ROOT/rom決め打ちだった
+# ため、DQ7_ROM_DIRで別のromディレクトリを指して起動したserver.py経由の
+# オブジェクト追加/編集API(copy_script_object/edit_script_commands)が、
+# check_block_alignment()の中だけ決め打ちパスを見てFileNotFoundErrorになる
+# バグがあった（build_tree()はserver.build_treeに委譲していたので無関係なく
+# 動いていたが、check_block_alignment()だけが独自にファイルを開いていた）。
+_ROM_DIR = os.environ.get('DQ7_ROM_DIR') or os.path.join(_ROOT, 'rom')
+_SCRIPT_FILES_DIR = os.path.join(_ROM_DIR, 'extracted', 'SCRIPT')
 
 
 def _stub_tkinter():
@@ -73,7 +82,7 @@ def build_tree(filename: str) -> dict:
 def resolve_target(path_arg: str) -> str:
     if os.path.isabs(path_arg) and os.path.exists(path_arg):
         return os.path.basename(path_arg)
-    candidate = os.path.join(_ROOT, 'rom', 'extracted', 'SCRIPT', os.path.basename(path_arg))
+    candidate = os.path.join(_SCRIPT_FILES_DIR, os.path.basename(path_arg))
     if os.path.exists(candidate):
         return os.path.basename(path_arg)
     if os.path.exists(path_arg):
@@ -156,7 +165,7 @@ def check_block_alignment(filename: str, anomalies: list) -> None:
     respected it did not."""
     import script_viewer as sv
 
-    path = os.path.join(_ROOT, 'rom', 'extracted', 'SCRIPT', filename)
+    path = os.path.join(_SCRIPT_FILES_DIR, filename)
     with open(path, 'rb') as f:
         data = f.read()
     top = sv.parse_script(path)
@@ -233,7 +242,7 @@ def main() -> None:
         raise SystemExit(1)
 
     filename = resolve_target(sys.argv[1])
-    path = os.path.join(_ROOT, 'rom', 'extracted', 'SCRIPT', filename)
+    path = os.path.join(_SCRIPT_FILES_DIR, filename)
     file_size = os.path.getsize(path)
 
     tree = build_tree(filename)
