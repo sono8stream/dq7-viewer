@@ -254,6 +254,20 @@ word5 = Scale
 - 登場する場合のコンバイナモードは `Interpolate`→アルファブレンド、
   `Modulate`→乗算合成、`Add`/`AddSigned`/`MultAdd`等→加算系合成、に対応する。
 
+**各モードは3つのソーススロットのうち実際に読む数が異なる**(SPICAのGLSL
+生成コード(`FragmentShaderGenerator.cs`)で確認済みの対応): `Replace`はスロット0
+のみ(1入力)、`Modulate`/`Add`/`AddSigned`/`Subtract`/`DotProduct3Rgb`/
+`DotProduct3Rgba`はスロット0-1(2入力)、`Interpolate`/`MultAdd`/`AddMult`は
+3スロット全て(3入力)を読む。モードの入力数を超えたスロットにも生のワード上は
+値(余ったテクスチャID等)が残っているが、実際には評価されない。「Texture1/
+Texture2のIDが3つのソースnibbleのどこかに出現するか」だけを見て、モードの
+実入力数で切り詰めずに判定すると、未使用スロットのテクスチャを誤って
+別ステージ/役割に帰属させてしまう。(`MONSTER/e001.bcmdl.lz`の`Material`で
+実際に確認: ステージ0は`Modulate(Texture2, Texture0)`という2入力モードだが、
+そのステージの未使用な3番目のColorソーススロットに`Texture1`のIDが残っている。
+`Texture1`の本当の用途はステージ1の`MultAdd(Previous, FragmentPrimaryColor,
+Texture1)`という3入力モードで、そこでは正真正銘の加算項として使われている。)
+
 ## CANM(スケルタルアニメーション)
 
 スケルタルアニメは`.bcmdl`ではなく隣接する`.pack`の`SkeletalAnims` dictに格納。

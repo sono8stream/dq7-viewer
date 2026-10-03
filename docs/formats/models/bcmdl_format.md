@@ -278,6 +278,21 @@ Since `word1`'s header is a fixed constant determined by the stage number N
   alpha blending, `Modulate`→multiplicative compositing,
   `Add`/`AddSigned`/`MultAdd` etc.→additive compositing.
 
+**Each mode reads a different number of the 3 source slots** (per-slot
+semantics confirmed against SPICA's GLSL emitter): `Replace` reads only
+slot 0 (1 input); `Modulate`/`Add`/`AddSigned`/`Subtract`/`DotProduct3Rgb`/
+`DotProduct3Rgba` read slots 0-1 (2 inputs); `Interpolate`/`MultAdd`/
+`AddMult` read all 3 slots (3 inputs). A slot beyond a mode's input count
+still holds a value in the raw word (e.g. a leftover texture ID), but it is
+never evaluated — checking "does `Texture1`/`Texture2`'s ID appear anywhere
+in the 3 source nibbles" without first truncating to the mode's real input
+count will misattribute that unused slot's texture to the wrong stage/role.
+(Confirmed on `MONSTER/e001.bcmdl.lz`'s `Material`: stage 0 is
+`Modulate(Texture2, Texture0)`, a 2-input mode, with `Texture1`'s ID sitting
+in the stage's unused 3rd color-source slot; `Texture1`'s only real use is
+stage 1's `MultAdd(Previous, FragmentPrimaryColor, Texture1)`, a 3-input
+mode where it's genuinely the additive 3rd term.)
+
 ## CANM (skeletal animation)
 
 Skeletal animation is stored not in `.bcmdl` but in the `SkeletalAnims`

@@ -872,6 +872,18 @@ _COMBINER_MODE_NAMES = [
     'replace', 'modulate', 'add', 'addSigned', 'interpolate',
     'subtract', 'dotProduct3Rgb', 'dotProduct3Rgba', 'multAdd', 'addMult',
 ]
+# How many of the 3 source/operand slots each combiner mode actually reads,
+# confirmed against SPICA's GLSL emitter (SPICA.Rendering/Shaders/
+# FragmentShaderGenerator.cs GenCombinerColor/GenCombinerAlpha): Replace=1
+# (`Args[0]`), Modulate/Add/AddSigned/Subtract/DotProduct3*=2 (`Args[0..1]`),
+# Interpolate/MultAdd/AddMult=3 (`Args[0..2]`). A source nibble beyond a
+# mode's input count is unused padding in the raw command, NOT a real input -
+# see the mapper-role bug this fixes, below.
+_COMBINER_INPUT_COUNT = {
+    'replace': 1, 'modulate': 2, 'add': 2, 'addSigned': 2, 'interpolate': 3,
+    'subtract': 2, 'dotProduct3Rgb': 2, 'dotProduct3Rgba': 2,
+    'multAdd': 3, 'addMult': 3,
+}
 # Combiner mode -> how we actually composite that stage's texture as an
 # overlay mesh on top of the base (stage 0) mesh, in terms three.js can
 # render directly:
@@ -903,7 +915,26 @@ def _tex_env_mapper_roles(cg, mo, end):
     genuinely not part of this material's pixel output (most likely a
     normal/shading map feeding a separate SHDR program instead), so the
     caller should not render it as an overlay at all - not "render it but
-    mostly-transparent", not render it at all."""
+    mostly-transparent", not render it at all.
+
+    A stage's raw Source word always has 3 nibbles per channel (color/alpha)
+    regardless of how many the stage's combiner mode actually reads (see
+    _COMBINER_INPUT_COUNT) - e.g. Modulate only evaluates Args[0]/Args[1],
+    so whatever texture ID happens to sit in the unused 3rd nibble is NOT
+    actually part of that stage's output. Found via MONSTER/e001.bcmdl.lz
+    (monster "e001", reported rendering solid black instead of its blue base
+    with e001b's black regions showing through): stage0 is
+    Modulate(Texture2, Texture0) with Texture1(e001b)'s id sitting unread in
+    the unused 3rd color-source nibble; before this fix that unused nibble
+    made mapper1(e001b) match first and get locked in as stage0's 'modulate'
+    (-> MultiplyBlending), even though e001b's real-and-only use is stage1's
+    MultAdd(Previous, FragmentPrimaryColor, Texture1) - a 3-input op whose
+    3rd term genuinely adds Texture1 onto the running result (-> additive:
+    black contributes nothing, matching the expected see-through blue).
+    Truncating each stage's source nibbles to its mode's real input count
+    before matching fixes this (and generalizes: any mode whose 3rd nibble
+    is unused - Replace/Modulate/Add/AddSigned/Subtract/DotProduct3* - can
+    no longer produce a false match off of combiner-irrelevant padding)."""
     d = cg.d
     roles = {}
     off = 4
@@ -913,10 +944,12 @@ def _tex_env_mapper_roles(cg, mo, end):
         if stage is not None and off + 16 <= limit:
             source = struct.unpack_from('<I', d, mo + off - 4)[0]
             combiner = struct.unpack_from('<I', d, mo + off + 8)[0]
-            color_src = [(source >> k) & 0xf for k in (0, 4, 8)]
-            alpha_src = [(source >> k) & 0xf for k in (16, 20, 24)]
             color_mode = _COMBINER_MODE_NAMES[combiner & 0xf]
             alpha_mode = _COMBINER_MODE_NAMES[(combiner >> 16) & 0xf]
+            n_color = _COMBINER_INPUT_COUNT.get(color_mode, 3)
+            n_alpha = _COMBINER_INPUT_COUNT.get(alpha_mode, 3)
+            color_src = [(source >> k) & 0xf for k in (0, 4, 8)][:n_color]
+            alpha_src = [(source >> k) & 0xf for k in (16, 20, 24)][:n_alpha]
             for mapper_idx, tex_src in _TEXENV_SRC_TEXTURE.items():
                 if mapper_idx == 0 or mapper_idx in roles:
                     continue  # mapper 0 always renders as the base mesh
