@@ -241,6 +241,39 @@ TALKED_TO_OPCODE = 0x0000000f
 # "branch if KO'd" checks on the same character, not open/close brackets).
 IF_KO_STATUS_OPCODE = 0x00000070
 
+# 【確定 2026-10-03】戦闘開始コマンド。params=[encount_group_id]
+# （観測値: 501〜581, 970, 18920〜18971, 19065〜19170, 21011 等 - いずれも
+# `LEVELDATA/dq7_encount_data.dat`の通常エンカウントテーブルとは別の、
+# スクリプト専用の戦闘グループIDと見られる）。
+# exefs(`rom/exefs/code.decompressed.bin`)をr2(asm.bits=32)で解析して確定:
+# low16=0x1b(27)の下位16bitディスパッチャ(`script::CommandFunction`,
+# file offset 0x216610からの236エントリジャンプテーブル、index 0x1b →
+# VA 0x316aac)が呼ぶハンドラは、file offset 0x21b3c0
+# (`script::cmdEncountSetFlag`, VA 0x31b3c0)を直接呼び出す。この関数は:
+#   - `Encount::getSingleton`/`EncountData::setTileId`/`Encount::brew`
+#     (戦闘で出現するモンスターグループの設定)
+#   - `PlayerManager::getInstance`経由でプレイヤーの現在位置・向きを
+#     取得しEncount用構造体へコピー(戦闘後に同じ位置へ戻すためと見られる)
+#   - `MapChange::setBtlFloorId`(戦闘背景のフロアID設定)
+#   - `ScriptStatus::setScriptBattleResultFlag`(戦闘結果をIF_FLAGの
+#     type=2(非永続)空間の指定flag_idへ書き込む。このflag_idは、この
+#     コマンド自身の宣言パラメータではなく、**スクリプト上で直後に置かれた
+#     コマンドの生バイト列(opcode下位byteとparam[0])を読み出すことで
+#     得ている**——意図的な設計かは不明だが、実データでは直後に必ず
+#     `IF_FLAG(2, flag_id, 1)`が続き、戦闘後にその`flag_id`で勝敗分岐する
+#     定型パターンになっている)
+#   - 最終的に`PartUtility::startBattle`を呼んで実際の戦闘へ遷移する
+# を順に行う。全ROM横断スキャン(`rom/extracted/SCRIPT/*.bin`)で、この
+# コマンドが`IF_TALKED_TO`の子ブランチとして使われている例は0件
+# （話しかけて戦闘になるNPCは、この命令自体をIF_TALKED_TOで囲むのではなく、
+# 別オブジェクトの会話シーケンス側で`OBJECT_TOGGLE`等によりこの
+# scriptobjectを有効化し、有効化されたobjectの`execute`プロシージャの
+# 先頭(indent 0)でこのコマンドを無条件実行する、という間接的な構成を
+# 取っている——例: `SCRIPT/x09nboss.bin`のgroup5 obj7(param=501)と、
+# 同じgroup内のobj1(戦闘準備cmd opcode 0x00010056にも同じ501が登場)）。
+# 詳細は`docs/battle_start_opcode_investigation.md`参照。
+START_BATTLE_OPCODE = 0x0000001b
+
 # 【確定 2026-09-29、`script::cmdIsPartyMember`(file offset 0x219c44)の
 # r2逆アセンブルで確定】"is currently a living party member" branch
 # condition: params=[character_id]（modeパラメータ無し、常に「該当キャラが
@@ -1503,6 +1536,9 @@ def _decode_command(raw: bytes) -> dict:
         out['name'] = 'IF_KO_STATUS'
         out['character_id'] = params[0]
         out['branch_when'] = 'ko' if params[1] != 0 else 'alive'
+    elif opcode == START_BATTLE_OPCODE and len(params) >= 1:
+        out['name'] = 'START_BATTLE'
+        out['encount_group_id'] = params[0]
     elif opcode == IF_IS_PARTY_MEMBER_OPCODE and len(params) >= 1:
         out['name'] = 'IF_IS_PARTY_MEMBER'
         out['character_id'] = params[0]

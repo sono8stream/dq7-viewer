@@ -490,6 +490,8 @@ function renderTree(tree) {
             ? `if char=${c.character_id} is ${c.branch_when === 'ko' ? '戦闘不能' : '生存'}`
             : c.name === 'IF_IS_PARTY_MEMBER'
             ? `if char=${c.character_id} is in party`
+            : c.name === 'START_BATTLE'
+            ? `⚔️ START_BATTLE group=${c.encount_group_id}`
             : c.name === 'ADD_PARTY_MEMBER'
             ? `ADD_PARTY_MEMBER char=${c.character_id}`
             : c.name === 'REMOVE_PARTY_MEMBER'
@@ -1072,6 +1074,20 @@ function showCommandDetail(c, o, p, ci) {
     lines.push(`  旧称"op_0000006f"。過去に「実行すると対象キャラの表示状態に副作用(消失)」と誤解されていたが、実際はIF_FLAGと同じ`);
     lines.push(`  if/elseifネスト深さの条件分岐オペコードであり、対応するネスト先コマンド無しに単独アクションとして誤挿入したことによる構造崩れが原因だった。`);
   }
+  if (c.name === 'START_BATTLE') {
+    lines.push(`START_BATTLE (確定 2026-10-03、script::cmdEncountSetFlag/file offset 0x21b3c0のr2解析で確定): encount_group_id=${c.encount_group_id}`);
+    lines.push(`  低16bitディスパッチャ(script::CommandFunction, index 0x1b)から直接呼ばれ、Encount::getSingleton/`);
+    lines.push(`  EncountData::setTileId/Encount::brewでencount_group_idの戦闘グループを設定した上でPartUtility::startBattleを`);
+    lines.push(`  呼び、実際に戦闘へ遷移する。MapChange::setBtlFloorIdで戦闘背景も設定する。`);
+    lines.push(`  戦闘結果はScriptStatus::setScriptBattleResultFlagによりIF_FLAGのtype=2(非永続)空間へ書き込まれるが、`);
+    lines.push(`  その書き込み先flag_idはこのコマンド自身のparamsではなく、スクリプト上で直後に置かれたコマンドの生バイト列`);
+    lines.push(`  (opcode下位byteとparam[0])を読んで得ている - 実データでは直後に必ずIF_FLAG(2, flag_id, 1)が続き、`);
+    lines.push(`  戦闘後にそのflag_idで勝敗分岐する定型パターンになっている。`);
+    lines.push(`  全ROM走査でIF_TALKED_TOの子ブランチとして使われている例は0件 - 話しかけて戦闘になるNPCは、`);
+    lines.push(`  このコマンド自体をIF_TALKED_TOで囲むのではなく、別オブジェクトの会話シーケンス側でOBJECT_TOGGLE等により`);
+    lines.push(`  このscriptobjectを有効化し、有効化後のexecuteプロシージャの先頭(indent 0)で無条件実行する構成を取る。`);
+    lines.push(`  詳細: docs/battle_start_opcode_investigation.md`);
+  }
   if (c.name === 'ADD_PARTY_MEMBER') {
     lines.push(`ADD_PARTY_MEMBER: character_id=${c.character_id}  mode_param=${c.mode_param}`);
     lines.push(`  confirmed on real hardware to add this character to the save's Party array.`);
@@ -1295,6 +1311,7 @@ const _KNOWN_PARAM_TYPES = {
   '0x0000000f': { prefix: ['u32'], rest: 'u32' },                 // IF_TALKED_TO (確定、2026-08-28)
   '0x00000070': { prefix: ['u32', 'u32'], rest: 'u32' },          // IF_KO_STATUS (確定、2026-09-29): [character_id, mode(1=戦闘不能で分岐/0=生存で分岐)]
   '0x0000006f': { prefix: ['u32'], rest: 'u32' },                 // IF_IS_PARTY_MEMBER (確定、2026-09-29): [character_id]
+  '0x0000001b': { prefix: ['u32'], rest: 'u32' },                 // START_BATTLE (確定、2026-10-03): [encount_group_id]
 };
 // mirrors server.py's _MESSAGE_OPCODE_LO (MSG-family opcodes matched by
 // low byte, not exact value) - [msgID, count, ...] shape, both u32.
