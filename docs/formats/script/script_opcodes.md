@@ -175,6 +175,39 @@ conversation replay in full every time the player talks, the *last* command
 in the branch must be `0x0003`, regardless of what the earlier commands are
 tagged with.
 
+## Multi-Frame Blocking Commands: Re-Entry Timing
+
+`ScriptTree::recursiveTree` (the interpreter that walks a procedure's
+command tree) only re-walks a branch's body from its start when the
+branch's own guard condition (e.g. `IF_TALKED_TO`) evaluates true again —
+which, for a player-interaction trigger, means the next time the player
+interacts (talks) again, not continuously every frame. This has a
+user-visible consequence for any command that spans multiple frames while
+waiting on player input *other than* simply dismissing a message box — most
+notably a choice menu such as `CHOICE_MENU`: a UI system outside the script
+engine drives the menu's cursor and detects the player's final selection
+every frame, but the *script* side only re-checks that command's completion
+(`isEnd()`) when the tree is re-walked. Concretely, for `IF_TALKED_TO →
+CHOICE_MENU → next_command`:
+
+- Selecting an option in the menu does **not** make `next_command` run in
+  that same conversation — the script never re-visits `CHOICE_MENU` to
+  notice the selection finished, because `IF_TALKED_TO` doesn't fire again
+  until the player initiates a new interaction.
+- Talking again re-triggers `IF_TALKED_TO`, the tree is walked from the top,
+  `CHOICE_MENU` is found already finished (its `isEnd()` was true all
+  along), and the walk falls straight through to `next_command` in that same
+  pass.
+
+Verified on real hardware (2026-10-03) with a purpose-built test object
+mirroring a real `CHOICE_MENU` → warp sequence (see `group3`/`obj9` in
+`SCRIPT/m01nk1f1.bin` for an authored example of this exact pattern, where
+the command after `CHOICE_MENU` only ever fires on the visit *after* the one
+where the choice was made). This is a property of the generic interpreter,
+not specific to `CHOICE_MENU` — it should apply to any command that can take
+more than one frame to finish without itself being the thing the player
+repeatedly presses a button to re-check.
+
 ## Confirmed Opcode List
 
 | opcode | name | parameters | meaning | status |
@@ -193,7 +226,7 @@ tagged with.
 | `0x00010064` | `PARTY_SLOT_ACTIVATE` (tentative name) | `[slot, value]` | presumed to be an operation related to a formation slot. Confirmed that it alone does not cause any significant visible change in formation behavior on real hardware | tentative name (effect unconfirmed) |
 | `0x00010093` | `PARTY_SLOT_QUERY` (tentative name) | `[type, slot]` | presumed to be a formation-slot state query (for reading/branching). Often referenced multiple times within a single process, suggesting it's a read operation rather than a one-time write | tentative name (effect unconfirmed) |
 | `0x00010096` | `JOIN_BANNER` (also called `FANFARE_MSG`) | `[msgID, count, style]` | displays a jingle-accompanied message banner such as "X has joined the party" | confirmed |
-| `0x000100c5` | `CHOICE_MENU` (`CmdOpenPartyChangeMenu`) | `[msgID, p1, flag_slot2..flag_slot6]` | a multi-choice menu for changing the party formation. Building the candidate list (onOpen) dynamically scans the current party, but resolving the selection result (onResult) is an implementation hardcoded to 4 specific character IDs and does not support arbitrary characters. See a separate document for details | confirmed |
+| `0x000100c5` | `CHOICE_MENU` (`CmdOpenPartyChangeMenu`) | `[msgID, p1, flag_slot2..flag_slot6]` | a multi-choice menu for changing the party formation. Building the candidate list (onOpen) dynamically scans the current party, but resolving the selection result (onResult) is an implementation hardcoded to 4 specific character IDs and does not support arbitrary characters. See a separate document for details. **The command physically following this one in the same block does not run until the *next* time the branch is re-entered** (see "Multi-Frame Blocking Commands" above) — e.g. a warp placed right after it only happens on the visit after the one where the choice was made | confirmed |
 
 ## Related Data Files
 
