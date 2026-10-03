@@ -18,11 +18,9 @@ Webビューア(`webapp/static/`)自体も`i18n.js`による日英トグル機�
 
 `webapp/server.py`は起動時に`script_viewer.py`/`splice_procedure.py`/
 `verify_script_structure.py`（`script/`配下）と`lz11_decompress.py`（リポジトリ
-直下）をimportする。これらはゲームデータを含まない純粋なコードなので公開に
-問題はないが、**dq7-tools側の`webapp/`を丸ごとコピーして同期するだけではこれら
-3+1ファイルが同期されない**（`script/`配下は通常dq7-tools側のsample_data等を
-含むため同期対象外にしているため）。`webapp/`を更新したら、この4ファイルが
-dq7-tools側の対応ファイルと食い違っていないかも都度確認すること。
+直下）をimportする。いずれもゲームデータを含まない純粋なコードで、このリポジトリに
+同梱済み。`webapp/`配下を変更する際は、この4ファイルとの依存関係を壊していないか
+（import先の関数シグネチャ変更等）も確認すること。
 
 ## これは何でないか
 
