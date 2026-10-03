@@ -1024,15 +1024,18 @@ function showCommandDetail(c, o, p, ci) {
     lines.push(`  それ以外は同一のメッセージ表示コマンド。0x0a/0x0b/0x0d/0x0eに同種の派生があるかは未調査)`);
   }
   if (c.name === 'MSG' && c.repeat_mode !== undefined) {
-    const modeText = c.repeat_mode === 'repeats_every_time' ? '毎回再生(話しかけるたびに再生される)' : '1度きり(画面を切り替えるまで再実行されない)';
-    lines.push(`repeat_mode: ${c.repeat_mode} - ${modeText}`);
-    lines.push(`  (確定 2026-08-28: opcode上位16bitが0x0003なら毎回再生、0x0001なら1度きり。`);
-    lines.push(`  全ROM検証(script/scan_msg_repeat_mode_gating.py)で使い分けの設計意図も裏付け済み:`);
-    lines.push(`  repeatsの99.5%はIF_TALKED_TO分岐の中(プレイヤーが話しかけて起動する会話)、`);
-    lines.push(`  onceの100%近く(16261/16263)はIF_TALKED_TO分岐の外(シーン内の自動台詞/ナレーション)。`);
-    lines.push(`  同じ上位16bitパターンがop_0001XXXX/op_0003XXXX等、MSG以外のオペコード`);
-    lines.push(`  ファミリーでも観測されており、コマンド種別に関わらない共通の実行頻度制御`);
-    lines.push(`  ビットである可能性がある(そちらは未検証))`);
+    lines.push(`repeat_mode: ${c.repeat_mode} (このコマンド自身のopcode上位16bitの生値)`);
+    lines.push(`  【2026-10-03訂正】この値は「このメッセージ単体」の再生頻度ではない。`);
+    lines.push(`  実機検証の結果、if/elseifブロック内で物理的に最後に置かれたコマンドの`);
+    lines.push(`  上位16bitだけが意味を持ち、そのブロックに属する兄弟コマンド全員の完了状態を`);
+    lines.push(`  まとめてリセットするかどうかを決めることが分かった: ブロック最後のコマンドが`);
+    lines.push(`  0x0003(repeats_every_time)ならブロック全体が毎回最初から再実行され(途中の`);
+    lines.push(`  0x0001コマンドも含めて)、最後が0x0001(once_until_scene_change)ならブロック`);
+    lines.push(`  全体が1度きりで二度と実行されない(途中にあった0x0003コマンドも道連れになる)。`);
+    lines.push(`  このコマンドがブロックの最後かどうかはビュアー側では判定していないため、`);
+    lines.push(`  この値を「このメッセージが毎回出る/出ない」の確定情報として読まないこと。`);
+    lines.push(`  全ROM検証では、repeatsの99.5%はIF_TALKED_TO分岐の中、onceの100%近く`);
+    lines.push(`  (16261/16263)はIF_TALKED_TO分岐の外、という設計傾向が確認されている。`);
   }
   if (c.name === 'IF_FLAG' || c.name === 'SET_FLAG') {
     const verb = c.name === 'IF_FLAG' ? 'if' : 'write';
