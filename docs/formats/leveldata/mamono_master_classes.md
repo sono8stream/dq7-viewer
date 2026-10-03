@@ -1,44 +1,52 @@
-# 「モンスターがなつく」シーケンスのバトルタスク構造
+# Battle Task Structure for the "Monster Tames You" Sequence
 
-戦闘後、倒したモンスターを「モンスターパーク」の所有モンスターリストに
-追加（テイム）する演出を実装するクラス群。徒歩パーティへの直接加入ではなく、
-モンスターパークの所有モンスターリストへの追加に相当する。
+The group of classes implementing the presentation of adding a defeated
+monster, after battle, to the owned-monster list of the "Monster Park."
+This corresponds to addition to the Monster Park's owned-monster list,
+not direct recruitment into the walking party.
 
-## クラス構成: `BattleTaskMamonoMaster` + `BattleExecMamonoMaster00/01/02`
+## Class composition: `BattleTaskMamonoMaster` + `BattleExecMamonoMaster00/01/02`
 
-DQ7のバトルタスクは「1つの`BattleTaskXxx`が複数の`BattleExecXxx`（サブ状態）を
-順に実行する」という設計（他のバトルタスクにも共通するパターン）。このシーケンスは
-3ステートで構成される。
+DQ7's battle tasks follow the design "one `BattleTaskXxx` executes several
+`BattleExecXxx` (sub-states) in sequence" (a pattern shared with other
+battle tasks). This sequence consists of 3 states.
 
-| クラス | 役割 |
+| Class | Role |
 |---|---|
-| `BattleExecMamonoMaster00` | システムメッセージ1件を表示。表示文言は、対象モンスターの属性バイト(`+0x84`の上位3bit)で単数/複数等の言い回しを切り替える文法バリエーション選択を伴う |
-| `BattleExecMamonoMaster01` | Yes/No確認のシステムメッセージを表示。表示後、グローバルflag配列への書き込みヘルパー関数を呼ぶ |
-| `BattleExecMamonoMaster02` | プレイヤーの回答（グローバルの1byteフラグ）を見て分岐。Yes側では`BattleResult::setMonsterAttach`を呼んでテイム成立を確定し対応するメッセージを表示。No側では別のメッセージを表示するのみ |
+| `BattleExecMamonoMaster00` | Displays a single system message. The displayed wording involves a grammar-variant selection (singular/plural, etc.) that switches based on the target monster's attribute byte (upper 3 bits of `+0x84`) |
+| `BattleExecMamonoMaster01` | Displays a Yes/No confirmation system message. After display, calls a helper function that writes to a global flag array |
+| `BattleExecMamonoMaster02` | Branches on the player's answer (a global 1-byte flag). On the Yes side, calls `BattleResult::setMonsterAttach` to finalize the taming and displays the corresponding message. On the No side, it only displays a different message |
 
-`BattleResult::setMonsterAttach`という関数名から、テイム成立時にモンスターが
-`BattleResult`（戦闘結果構造体）へ「同行モンスター」として紐付けられ、戦闘終了後に
-モンスターパークへ登録される、という流れと推測される（関連シンボル
-`BattleResult::setMonsterAttachCount`, `MonsterParkUtility::getMonsterParkHouseCount`
-も存在）。
+Based on the function name `BattleResult::setMonsterAttach`, it is
+presumed that upon a successful tame, the monster is linked to
+`BattleResult` (the battle-result structure) as an "accompanying monster,"
+and registered into the Monster Park after the battle ends (related
+symbols `BattleResult::setMonsterAttachCount` and
+`MonsterParkUtility::getMonsterParkHouseCount` also exist).
 
-`BattleTaskMamonoMaster`自体（`initializeUser`）は3つのサブ状態を登録する
-だけで、このタスクをそもそも起動するかどうかの判定はさらに外側（戦闘終了
-処理）にある。候補関数として`MonsterPartyUtility::isEnableCallMonster`・
-`status::isEnableCallMonster`が存在し、生存中のモンスターを1体ずつ走査する
-ループ構造までは確認されているが、判定条件自体（なつきやすさ・確率抽選等）
-は未解読。
+`BattleTaskMamonoMaster` itself (`initializeUser`) merely registers the 3
+sub-states; the decision of whether to launch this task at all lies
+further outside (the battle-end processing). Candidate functions
+`MonsterPartyUtility::isEnableCallMonster` and
+`status::isEnableCallMonster` exist, and a loop structure scanning
+surviving monsters one by one has been confirmed to exist, but the actual
+judgment condition itself (tameability, probability roll, etc.) has not
+been decoded.
 
-## 未解決点
+## Unresolved points
 
-- `isEnableCallMonster`系の条件式（「なつく」確率・条件）。
-- `BattleResult::setMonsterAttach`呼び出し後の実際のモンスターパーク登録処理。
-- モンスターの属性バイト`+0x84`（上位3bit、文法バリエーション分岐に使用）が
-  モンスターパラメータテーブルのどのフィールドに対応するか。
+- The conditional expression for the `isEnableCallMonster` family (the
+  probability/conditions for "taming").
+- The actual Monster Park registration processing that occurs after the
+  `BattleResult::setMonsterAttach` call.
+- Which field of the monster parameter table corresponds to the monster's
+  attribute byte `+0x84` (upper 3 bits, used for the grammar-variant
+  branch).
 
-## 調査手法のメモ
+## Investigation method notes
 
-戦闘システム内蔵の固定メッセージ（SCRIPTファイルを経由せず、ExeFS側が直接
-メッセージIDを保持するケース）は、メッセージIDの32bit整数リテラルをExeFS
-全体でバイト検索することで発見できる。「SCRIPT検索で見つからない」からと
-いって当該メッセージが存在しないとは限らない。
+Fixed messages built into the battle system (cases where the ExeFS side
+holds the message ID directly, without going through a SCRIPT file) can be
+found by byte-searching the entire ExeFS for the 32-bit integer literal of
+the message ID. The fact that a message is "not found by searching
+SCRIPT" does not mean that message does not exist.

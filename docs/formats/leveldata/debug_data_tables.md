@@ -1,35 +1,40 @@
-# 開発者向けデバッグ関連データ
+# Developer-Facing Debug-Related Data
 
 ## `dq7_script_sample_list.dat`
 
-ヘッダ(20byte, u32×5): `(magic, count, record_size=56, countの重複, 予約=0)`。
-本タイトルでは`magic=15167, count=18, record_size=56`で、正確に18レコードで
-終端する。各レコードは`[id:u32][category:u32][type:u8][UTF-8ラベル][ゼロ埋め]`
-という構造。
+Header (20 bytes, u32×5): `(magic, count, record_size=56, duplicate of
+count, reserved=0)`. In this title `magic=15167, count=18,
+record_size=56`, and the file terminates after exactly 18 records. Each
+record has the structure
+`[id:u32][category:u32][type:u8][UTF-8 label][zero padding]`.
 
-観測されたcategory値は`0x1195`/`0x1260`/`0x1261`/`0x1262`/`0x1263`/`0x1196`/
-`0x11ae`の7種で、スクリプトオペコードの分類（メッセージ系・オブジェクト操作系・
-フェード/マップ遷移系等）に対応するカテゴリIDと見られる。18件のラベルは
-メッセージ表示・オブジェクト移動/切替/回転/当たり判定/表示/設定・メニュー表示・
-プレイヤーロック・フェード効果・マップ遷移といった基本操作に限られ、全
-オペコードを網羅するものではない（ファイル名の「sample」通り）。
+The observed category values are 7 kinds: `0x1195`/`0x1260`/`0x1261`/
+`0x1262`/`0x1263`/`0x1196`/`0x11ae`, which appear to be category IDs
+corresponding to classifications of script opcodes (message-related,
+object-manipulation-related, fade/map-transition-related, etc.). The 18
+labels are limited to basic operations such as message display,
+object move/toggle/rotate/collision/display/configuration, menu display,
+player lock, fade effect, and map transition — it does not cover every
+opcode (as the "sample" in the file name suggests).
 
-開発者向けの「スクリプトオペコードをカテゴリ別に呼び出すコマンドブラウザ」用の
-ラベルデータと推測される。製品版ROMでこの機能が実際に呼び出し可能な状態かは
-未検証。
+This is presumed to be label data for a developer-facing "command browser
+that invokes script opcodes by category." Whether this feature is
+actually callable in the retail ROM is unverified.
 
 ## `dq7_command_cache.dat`
 
-同形式のヘッダ`[magic=14601][count=81][record_size=4][countの重複][予約=0]`を
-持ち、後続は81件の`[u16値][u16=0xffff(終端マーカー)]`ペア。値は498〜4037の
-範囲で、連番クラスタ（1182-1185・4001-4037等）を多く含む。用途未確定（リソース
-IDキャッシュの可能性が高いが断定できない）。
+Has a header of the same format,
+`[magic=14601][count=81][record_size=4][duplicate of count][reserved=0]`,
+followed by 81 `[u16 value][u16=0xffff (terminator marker)]` pairs. Values
+range from 498 to 4037 and include many sequential clusters (e.g.
+1182-1185, 4001-4037). Purpose unconfirmed (likely a resource ID cache,
+but not conclusively determined).
 
-## Sirenエンジンのデバッグメニューシステム
+## The Siren engine's debug menu system
 
-ARM実行コード中に以下の文字列・クラス名が存在し、開発者向けデバッグメニュー
-システム（`DebugMenuHelper`/`DebugMenuNumber`）がエンジンレベルで組み込まれて
-いることが確定している。
+The following strings and class names exist in the ARM executable code,
+confirming that a developer-facing debug menu system
+(`DebugMenuHelper`/`DebugMenuNumber`) is built in at the engine level.
 
 ```
 DEBUG, DEBUG/ASSERT, DEBUG/CAPTURE, DEBUG/SAVE, DEBUG/KEYRECORD, DEBUG/LOG
@@ -37,18 +42,22 @@ siren::canvas::DebugMenuHelper::DebugMenuHelper()
 siren::canvas::DebugMenuNumber::DebugMenuNumber()
 ```
 
-これらはSquare Enixの「Siren」エンジン由来と見られる。UIラベル文字列はARM
-コード側にハードコードされず、外部データ(MESS等)から読む設計のため、日本語
-ラベルのバイト列はコード内には出現しない。
+These appear to originate from Square Enix's "Siren" engine. Since UI
+label strings are not hardcoded on the ARM code side and are designed to
+be read from external data (MESS, etc.) instead, the byte sequences for
+Japanese labels do not appear inside the code.
 
-RomFSルート直下の`DEBUG2/KEYRECORD/`・`DEBUG2/KEYRECORD_WIN32/`フォルダには
-`startup000.dat`〜`startup012.dat`が存在し、開発時のキー入力録画データと推測
-される。
+The `DEBUG2/KEYRECORD/` and `DEBUG2/KEYRECORD_WIN32/` folders directly
+under the RomFS root contain `startup000.dat` through `startup012.dat`,
+presumed to be key-input recording data from development.
 
-## 戦闘デバッグ用アイテム
+## Battle debug items
 
-`dq7_item_list.dat`（52byte固定長レコード）に、通常プレイでは入手経路のない
-戦闘テスト用アイテムが2件残存する（オフセット`0x6574`・`0x65a8`）。説明文の
-内容から、片方は「敵側全滅」、もう片方は「味方側全滅」の効果を持つデバッグ用
-アイテムと見られる。レコード構造は`[desc_msgid:u32][???:u32][0:u32][???:u32]
-[???:u32][???:u16?][???:u16?]...`で、説明文ID以外のフィールドの意味は未解読。
+`dq7_item_list.dat` (fixed 52-byte records) has 2 surviving battle-test
+items with no acquisition route in normal play (at offsets `0x6574` and
+`0x65a8`). From the content of their description text, one appears to be a
+debug item with the effect of "wiping out the enemy side," and the other
+"wiping out the ally side." The record structure is
+`[desc_msgid:u32][???:u32][0:u32][???:u32][???:u32][???:u16?][???:u16?]...`,
+and the meaning of the fields other than the description ID has not been
+decoded.

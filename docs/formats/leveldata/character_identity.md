@@ -1,58 +1,65 @@
-# `CHARACTER/pXXXX`モデル番号とキャラIDの対応
+# Mapping Between `CHARACTER/pXXXX` Model Numbers and Character IDs
 
-## 使えない経路: `dq7_chara_list.dat`
+## A dead end: `dq7_chara_list.dat`
 
-`LEVELDATA/dq7_chara_list.dat`(927レコード×84byte)はモデルアセットの
-カタログであり、レコード順序はキャラID体系と無関係。各レコードにモデル名
-文字列(`pXXXX`)自体は入っているが、レコード位置からキャラIDを逆引きする
-ことはできない。
+`LEVELDATA/dq7_chara_list.dat` (927 records × 84 bytes) is a catalog of
+model assets, and its record order is unrelated to the character ID
+system. Each record does contain the model name string (`pXXXX`) itself,
+but a character ID cannot be reverse-looked-up from a record's position.
 
-## 使える経路: `dq7_character_init_data.dat`
+## The working path: `dq7_character_init_data.dat`
 
-このファイル（ヘッダ20byte + 46レコード×172byte）はレコードindex＝キャラID
-そのもの（index0はダミー）。各レコードのオフセット`+0x78`付近にASCII文字列で
-モデル番号の下3桁（`pXXXX`の`XXXX`部分、先頭の`p0`を除いた数字）が入っている。
+This file (20-byte header + 46 records × 172 bytes) has record index =
+character ID itself (index 0 is a dummy). Near offset `+0x78` of each
+record, there is an ASCII string holding the last 3 digits of the model
+number (the `XXXX` part of `pXXXX`, with the leading `p0` stripped).
 
 ```python
 HDR = len(data) - 46 * 172   # = 20
 for char_id in range(46):
     rec = data[HDR + char_id*172 : HDR + (char_id+1)*172]
     model_suffix = rec[0x78:0x78+16].split(b'\x00')[0].decode('ascii', 'replace')
-    # 'CHARACTER/p0' + model_suffix(3桁) が実モデルのパス
+    # 'CHARACTER/p0' + model_suffix(3 digits) is the actual model path
 ```
 
-キャラIDから表示名を得るには`TEXT/PLAYER_NAME.txt`を引く。
+To get the display name from a character ID, look it up in
+`TEXT/PLAYER_NAME.txt`.
 
-## スクリプトの話者タグによる裏取り
+## Cross-checking via the script's speaker tag
 
-`MESS/`配下のテキストには話者タグ`#<モデル番号>`が付与されており、これは
-**キャラID（`dq7_character_init_data.dat`のレコードindex）ではなく、モデル
-番号（`pXXXX`の数字部分）と一致する**。両者が異なる値を取るキャラクターで
-検証することで、このタグがキャラIDではなくモデル番号であることを確定できる。
+Text under `MESS/` carries a speaker tag `#<model number>`, and this
+**matches the model number (the numeric part of `pXXXX`), not the
+character ID (the record index of `dq7_character_init_data.dat`)**. This
+can be confirmed by checking a character for which the two values differ,
+proving the tag is the model number rather than the character ID.
 
-## モデル番号(`pXXXX`)の範囲とキャラ区分の対応
+## Correspondence between model number (`pXXXX`) range and character category
 
-複数のモデルを比較した結果判明した、概ねの対応（境界値は「未満」）:
+The approximate correspondence found by comparing multiple models
+(boundary values are "less than"):
 
-| モデル番号の範囲 | 区分 |
+| Model number range | Category |
 | --- | --- |
-| p50未満 | パーティキャラ（仲間として戦闘に参加する主要メンバー） |
-| p50以上p100未満 | 仲間になるNPC（一時的・イベント的に仲間になるキャラ） |
-| p100以上p150未満 | 固有名称がついているNPC（ストーリー上の役割を持つ個別名キャラ） |
-| p150以上p400未満 | NPC（その他の名前ありモブ・住民等） |
-| p400以上 | その他（モンスター・オブジェクト・エフェクト等、人物以外を含む） |
+| below p50 | party characters (main members who join combat as companions) |
+| p50 to below p100 | NPCs that join the party (characters who join temporarily/for an event) |
+| p100 to below p150 | NPCs with a proper individual name (individually named characters with a story role) |
+| p150 to below p400 | NPCs (other named mobs/residents, etc.) |
+| p400 and above | other (monsters, objects, effects, etc., including non-humanoid entities) |
 
-この分類は`dq7_character_init_data.dat`のキャラID体系(id0〜45)とは別軸で、
-キャラID化されていないその他大勢のNPCモデルにも及ぶ（該当キャラIDはこの
-テーブルに載っていないため、上記の範囲でおおまかな位置づけを推測する用途に
-使う）。
+This classification is a separate axis from the character-ID system
+(id0-45) of `dq7_character_init_data.dat`, and also covers the large
+number of other NPC models that have not been assigned a character ID
+(since those character IDs are not in that table, use this range to
+roughly infer their category).
 
-## 一般化した手順
+## Generalized procedure
 
-1. `dq7_character_init_data.dat`の`+0x78`文字列でモデル番号→キャラID
-   （レコードindexそのもの）を逆引きする。このテーブルは46レコードのみ
-   （id0〜45）のため、載っていないモデル番号はこの経路では特定できない。
-2. `TEXT/PLAYER_NAME.txt`でキャラIDから表示名を引く。
-3. 可能なら`MESS/`のスクリプトテキストで話者タグ`#<モデル番号>`を検索し、
-   文脈から答え合わせする（タグはキャラIDではなくモデル番号と一致する点に
-   注意）。
+1. Reverse-look-up model number → character ID (the record index itself)
+   using the `+0x78` string in `dq7_character_init_data.dat`. Since this
+   table only has 46 records (id0-45), model numbers not listed in it
+   cannot be identified via this path.
+2. Look up the display name from the character ID in
+   `TEXT/PLAYER_NAME.txt`.
+3. If possible, search script text under `MESS/` for the speaker tag
+   `#<model number>` and cross-check from context (note that the tag
+   matches the model number, not the character ID).

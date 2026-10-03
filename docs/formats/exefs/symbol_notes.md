@@ -1,48 +1,53 @@
-# フィールドシンボル関連データの構造メモ
+# Notes on field-symbol related data structures
 
 ## `dq7_monster_param.dat`
 
-601レコード×136byte。レコードindex = モンスターID（レコード末尾にASCIIで
-自己IDの文字列が入ることで確認済み）。
+601 records × 136 bytes. Record index = monster ID (confirmed by an ASCII
+string of the monster's own ID appearing at the end of each record).
 
-先頭付近に複数のfloatフィールドがあり、確認できた意味は以下の通り:
+Several float fields exist near the start; the meanings confirmed so far:
 
-- `+0x0c`: 戦闘カメラの距離/画角パラメータ（モデルスケールではない。値を
-  下げるとカメラが寄り、敵が画面いっぱいに見える）
-- `+0x08`, `+0x10`, `+0x14`, `+0x40`, `+0x44`: 戦闘中のモデル表示スケールに
-  関わるfloat群（個別の寄与は未分離）
-- `+0x2c`/`+0x30`: 常に相等の値のペア。見た目スケールではないことを確認済み
+- `+0x0c`: battle-camera distance/field-of-view parameter (not a model
+  scale — lowering the value brings the camera closer, making the enemy
+  fill more of the screen)
+- `+0x08`, `+0x10`, `+0x14`, `+0x40`, `+0x44`: a group of float fields
+  related to the model's display scale during battle (individual
+  contributions not yet separated)
+- `+0x2c`/`+0x30`: always a pair of equal values; confirmed not to be a
+  visual scale
 
-このテーブルには、フィールド（マップ上）に表示されるシンボルの見た目
-サイズを制御するフィールドは存在しない。フィールドシンボルの大きさは
-シンボル自体のモデル/スケルトンのスケールに依存すると見られる。
+This table has no field controlling the visible size of symbols displayed
+on the field (map). The size of field symbols appears to depend on the
+scale of the symbol's own model/skeleton.
 
 ## `dq7_field_symbol.dat`
 
-159レコード×20byte。**世界地図（`wld_pNNx`/`wld_nNNx`）の徘徊シンボル専用の
-アンカー座標テーブル**であり、ダンジョン/フィールドマップのシンボル湧き
-位置はこのテーブルでは制御されない。
+159 records × 20 bytes. **An anchor coordinate table used only for roaming
+symbols on the world map (`wld_pNNx`/`wld_nNNx`)**; symbol spawn positions
+on dungeon/field maps are not controlled by this table.
 
 ```
-+0x00 u16  id (0xFF00 | 連番)
-+0x02 u16  0xFFFF マーカー
-+0x04 f32  X 座標（世界地図タイル座標系）
-+0x08 f32  Y 座標
-+0x0c u16  mapId（`dq7_encount_tile.dat`の+0x04と一致。値がwld_*のときのみ）
-+0x0e u16  symId（シンボル個体の一意ID。隣接サブ領域をまたぐ個体のみ共有）
++0x00 u16  id (0xFF00 | sequence number)
++0x02 u16  0xFFFF marker
++0x04 f32  X coordinate (world-map tile coordinate system)
++0x08 f32  Y coordinate
++0x0c u16  mapId (matches +0x04 of dq7_encount_tile.dat; only when the value is a wld_* map)
++0x0e u16  symId (unique symbol instance ID; shared only by instances spanning adjacent sub-regions)
 +0x10..   0
 ```
 
-「mapId = 5000 + floor_listのgrp値」という対応は世界地図のマップに限って
-成立する便宜的な観測であり、一般のダンジョン/町マップには適用できない。
+The correspondence "mapId = 5000 + the floor_list's grp value" is a
+convenient observation that holds only for world-map locations, and cannot
+be applied to ordinary dungeon/town maps.
 
-## ダンジョン/谷マップの`.pack.lz`シーングラフ構造
+## `.pack.lz` scene-graph structure for dungeon/valley maps
 
-`MAP/MAPDATA/*.pack.lz`はLZ11圧縮（ヘッダ`11 <u24 展開後サイズ LE>`）。
-展開後は`"MODEL"`から始まるCGFXシーングラフコンテナで、ヘッダ後に`WNOD`
-（ワールドノード表）→ 多数の`GNOD`（名前付きノード）が続く。
+`MAP/MAPDATA/*.pack.lz` is LZ11-compressed (header `11 <u24 decompressed
+size LE>`). After decompression, it is a CGFX scene-graph container
+starting with `"MODEL"`, followed after the header by a `WNOD` (world node
+table) → numerous `GNOD` (named nodes).
 
-`GNOD`レコード（0xB0 stride）の主要フィールド:
+Main fields of a `GNOD` record (0xB0 stride):
 
 ```
 +0x30 f32 posX
@@ -52,16 +57,19 @@
 +0x60-0x7c AABB
 ```
 
-座標系はゲームプレイ上のタイル座標系（0-176）とは別のローカル座標系
-（観測範囲で-40〜+55程度）。
+The coordinate system is a separate local coordinate system
+(observed range roughly -40 to +55) distinct from the gameplay tile
+coordinate system (0-176).
 
-ノード構成の例: `<name>`（地形本体）, `<name>msk1`（マスクメッシュ=歩行可能/
-コリジョン領域。1マップ1個）, `<name>ent`（入口ジオメトリ）, `<name>wt1`
-（水）, `<name>iwa`（岩）, 装飾オブジェクト（繁み等、複数配置）,
-`d_kaidan01`/`u_kaidan01`（階段=マップ間リンクノード）。
+Example node composition: `<name>` (the terrain body), `<name>msk1`
+(mask mesh = walkable/collision area, one per map), `<name>ent` (entrance
+geometry), `<name>wt1` (water), `<name>iwa` (rocks), decorative objects
+(bushes etc., placed multiple times), `d_kaidan01`/`u_kaidan01` (stairs =
+inter-map link nodes).
 
-**このシーングラフには生のタイルグリッド配列・シンボル出現座標配列は
-含まれていない。** コリジョンはメッシュ（`msk1`）ベースで、マップは2Dタイル
-ではなく3Dメッシュシーンとして構成されている。シンボルの湧き位置・索敵/
-追跡距離・寸法を決めるデータはRomFS側のいずれのテーブルにも見当たらず、
-実行時にExeFS側（ARMコード）で計算されていると見られる。
+**This scene graph does not contain a raw tile-grid array or a symbol-
+spawn-coordinate array.** Collision is mesh-based (`msk1`); maps are
+composed as 3D mesh scenes rather than 2D tiles. The data that determines
+symbol spawn positions, detection/pursuit radius, and dimensions is not
+found in any RomFS-side table, and appears to be computed at runtime on the
+ExeFS side (ARM code).

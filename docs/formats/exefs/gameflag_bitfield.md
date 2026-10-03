@@ -1,54 +1,59 @@
-# GameFlag のビットフィールド構造
+# `GameFlag` bitfield structure
 
-`GameFlag`クラスは、スクリプト側の`IF_FLAG`(opcode `0x00000003`)/
-`SET_FLAG`(opcode `0x00010004`)から参照される、フラグ用のビット配列を
-保持するクラスである。
+The `GameFlag` class holds the bit arrays used for flags, referenced from
+the script side's `IF_FLAG` (opcode `0x00000003`) / `SET_FLAG` (opcode
+`0x00010004`).
 
-## type引数による3本の独立したビット配列
+## Three independent bit arrays selected by the `type` argument
 
-`GameFlag::check(this, type, flag_id)` / `GameFlag::set(this, type, flag_id, value)`
-の第1引数`type`は、同一`this`インスタンス内にある3種類の独立したビット配列を
-選択する。`IF_FLAG`/`SET_FLAG`のスクリプト引数`[param0, flag_id, value]`の
-`param0`はこの`type`そのものである。
+The first argument `type` of `GameFlag::check(this, type, flag_id)` /
+`GameFlag::set(this, type, flag_id, value)` selects one of three
+independent bit arrays within the same `this` instance. `param0` of the
+script argument `[param0, flag_id, value]` for `IF_FLAG`/`SET_FLAG` is this
+`type` itself.
 
-| type | ビット配列のオフセット（`this`起点） | オンディスク（セーブファイル）換算 |
+| type | Bit array offset (relative to `this`) | On-disk (save file) equivalent |
 |---|---|---|
-| 0 | `this+0x218` | `0x20 + flag_id//8`（`GameFlag`ブロック先頭からのファイルオフセット） |
-| 1 | `this+0x418` | `0x220 + flag_id//8`（type0のバイト列から0x200byteずれた別バイト列） |
-| 2 | `this+0x008` | セーブに一切保存されない（後述） |
+| 0 | `this+0x218` | `0x20 + flag_id//8` (file offset from the start of the `GameFlag` block) |
+| 1 | `this+0x418` | `0x220 + flag_id//8` (a separate byte range, offset by 0x200 bytes from type 0's) |
+| 2 | `this+0x008` | Not saved at all (see below) |
 
-ビット位置の計算式（3タイプ共通）: `bit = flag_id & 0x1f`, `word = flag_id >> 5`
-（メモリ上は32bitワード単位のビット配列として扱われる）。
+Bit-position formula (common to all 3 types): `bit = flag_id & 0x1f`,
+`word = flag_id >> 5` (treated in memory as a bit array in 32-bit word
+units).
 
-`GameFlag::set`は`type==3`という特殊値を受け付け、「type0とtype1の両方に
-同時に書き込む」処理を行う。一方`GameFlag::check`には`type==3`の分岐が
-無く、`check`に`type=3`を渡した場合は常にfalseになる。
+`GameFlag::set` accepts the special value `type==3`, which performs "write
+to both type 0 and type 1 simultaneously." `GameFlag::check`, on the other
+hand, has no branch for `type==3`; passing `type=3` to `check` always
+returns false.
 
-## type=2 はセッション限定の一時フラグ
+## type=2 is a session-only temporary flag
 
-`GameFlag::serialize`（fileoffset `0x243c0c`）は`this+0x208`から`0x250`
-(592byte)をそのままセーブデータへコピーする。この範囲は`this+0x208`〜
-`this+0x458`であり、type=0のバケット(`+0x218`)とtype=1のバケット(`+0x418`)
-はどちらもこの範囲に収まり永続化されるが、type=2のバケット(`+0x008`)は
-この範囲より前にあるためセーブファイルには一切含まれない。
+`GameFlag::serialize` (file offset `0x243c0c`) copies the range from
+`this+0x208` to `0x250` (592 bytes) directly into the save data. This
+range is `this+0x208` through `this+0x458`; both the type-0 bucket
+(`+0x218`) and the type-1 bucket (`+0x418`) fall within this range and are
+persisted, but the type-2 bucket (`+0x008`) lies before this range and is
+therefore never included in the save file.
 
-`GameFlag::initialize`（fileoffset `0x243b38`）は起動時に`GameFlag::clear(this, 3)`
-でビット配列をゼロクリアした後、`this+0x208`〜`+0x458`を改めてmemsetする。
-これにより、**type=2のフラグは起動するたびに必ず0に戻る、セッション限定の
-一時フラグである**。
+`GameFlag::initialize` (file offset `0x243b38`) zero-clears the bit arrays
+at startup via `GameFlag::clear(this, 3)`, then memsets `this+0x208`
+through `+0x458` again. As a result, **type-2 flags are always reset to 0
+on every startup — they are a session-only temporary flag.**
 
-## flag_id空間のスコープについて
+## On the scope of the flag_id space
 
-- type0の大きい値（数千番台）のflag_idは、対応するSCRIPTファイルが
-  1ファイルのみで独立に`SET_FLAG`しているケースが多く、グローバルに一意な
-  物語進行フラグとして運用されていると見られる。
-- type1の小さい値（1桁〜2桁）のflag_idは、多数（数十〜100件以上）の
-  異なるSCRIPTファイルで独立に使われている。このため、type1のflag_idは
-  グローバルに一意な意味を持つものではなく、各マップのスクリプトが
-  自分自身のスコープ内だけで使うマップローカルな一時変数である可能性が
-  高い（マップをまたいで同じID=同じ意味、とは限らない）。
+- Large flag_id values (in the thousands) for type 0 are, in many cases,
+  independently `SET_FLAG`'d by only a single corresponding SCRIPT file,
+  and appear to be operated as globally unique story-progression flags.
+- Small flag_id values (1-2 digits) for type 1 are independently used by
+  many (several dozen to 100+) different SCRIPT files. For this reason,
+  type-1 flag_ids likely do not carry a globally unique meaning, and are
+  more likely map-local temporary variables used only within each map's
+  own script scope (the same ID across different maps does not necessarily
+  mean the same thing).
 
-## 関連クラス・関数（fileoffset、`code.decompressed.bin`基準）
+## Related classes/functions (file offset, relative to `code.decompressed.bin`)
 
 - `GameFlag::check` : `0x18f998`
 - `GameFlag::set` : `0x18b00c`

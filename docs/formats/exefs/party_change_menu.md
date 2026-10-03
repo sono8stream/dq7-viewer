@@ -1,23 +1,27 @@
-# パーティ変更系メニューの内部構造（ExeFS側）
+# Internal structure of the party-change menus (ExeFS side)
 
-対象クラス: `CmdOpenPartyChangeMenu`（スクリプトVMのコマンド実装クラス）、
-`PartyChangeMenu`、`TownFormationMenu`（いずれもFuncSearch.txtのシンボルから特定）。
-file offsetはベースゲーム基準（32bit ARM固定長命令）。
+Target classes: `CmdOpenPartyChangeMenu` (a script-VM command implementation
+class), `PartyChangeMenu`, `TownFormationMenu` (all identified from
+`FuncSearch.txt` symbols). File offsets are relative to the base game
+(32-bit ARM fixed-length instructions).
 
-## 前提・確度についての注記
+## Note on premises / confidence
 
-`CmdOpenPartyChangeMenu`がスクリプト側の特定opcodeのハンドラであるという対応関係は、
-クラス名・引数構造の一致という状況証拠に基づくもので、opcode番号から当該関数への
-実行時ディスパッチ経路そのものを直接確認できてはいない。一方、以下で述べる
-`CmdOpenPartyChangeMenu`・`PartyChangeMenu::onOpen`・`PartyChangeMenu::onResult`の
-3関数が同一の構造体（同じ`this`ポインタ、同じフィールドオフセット）を一貫して
-読み書きしていることは、デコンパイル結果から直接確認済みであり、これらが一体の
-機能であること自体は内部的に整合している。
+The correspondence between `CmdOpenPartyChangeMenu` and being the handler
+for a specific script-side opcode is based on circumstantial evidence (the
+class name and argument structure match); the actual runtime dispatch path
+from the opcode number to this function has not been directly confirmed.
+On the other hand, the fact that the three functions discussed below —
+`CmdOpenPartyChangeMenu`, `PartyChangeMenu::onOpen`, and
+`PartyChangeMenu::onResult` — consistently read and write the same
+structure (same `this` pointer, same field offsets) has been directly
+confirmed from decompilation results, so the internal consistency of these
+being one unified feature is itself confirmed.
 
-## `CmdOpenPartyChangeMenu::initialize`（file offset `0x220274`）
+## `CmdOpenPartyChangeMenu::initialize` (file offset `0x220274`)
 
-7個のパラメータ `[p0, p1, p2, p3, p4, p5, p6]` を受け取り、固定アドレスのシングルトン
-構造体（`0x45b05c`経由）へ以下のようにコピーする:
+Takes 7 parameters `[p0, p1, p2, p3, p4, p5, p6]` and copies them into a
+singleton structure at a fixed address (via `0x45b05c`) as follows:
 
 ```
 singleton.field_0xa1c = params[2]
@@ -27,86 +31,95 @@ singleton.field_0xa28 = params[5]
 singleton.field_0xa2c = params[6]
 ```
 
-`params[0]`は後続のメッセージキューイング処理（file offset `0x14fa30`）の「開始ID」、
-`params[1]`は「連続して積むページ数」として使われる（0以下なら即return、正なら
-その回数だけIDをインクリメントしながらキューに積むループ）。
+`params[0]` is used as the "starting ID" for the subsequent message
+queueing process (file offset `0x14fa30`), and `params[1]` as the "number
+of consecutive pages to queue" (returns immediately if 0 or less; otherwise
+loops that many times, incrementing the ID while queueing).
 
-## `CmdOpenPartyChangeMenu::isEnd`相当（file offset `0x220314`）
+## `CmdOpenPartyChangeMenu::isEnd` equivalent (file offset `0x220314`)
 
-シングルトンの状態バイトを見て完了判定を行い、完了していれば固定アドレス
-`0x541730`（フラグ管理構造体）に対し `type=2, id=singleton.field_0xa30` の値で
-フラグセットを行う。`field_0xa30`は`initialize`が書き込んだ5フィールド
-（`0xa1c`〜`0xa2c`）とは別の、選択結果を格納する6個目のフィールド。
+Checks the singleton's status byte to determine completion; if complete,
+sets a flag at the fixed address `0x541730` (the flag-management structure)
+with `type=2, id=singleton.field_0xa30`. `field_0xa30` is a 6th field,
+separate from the 5 fields (`0xa1c`-`0xa2c`) written by `initialize`, that
+holds the selection result.
 
-## `PartyChangeMenu::onOpen`（候補リスト構築、file offset `0x1073cc`系統）
+## `PartyChangeMenu::onOpen` (candidate-list construction, around file offset `0x1073cc`)
 
 ```c
 void PartyChangeMenu::onOpen(this) {
     party = PlayerParty::getInstance();
-    this->a08 = party->b8;              // 生きているパーティの人数
+    this->a08 = party->b8;              // number of living party members
     this->a1c = this->a20 = this->a24 = this->a28 = this->a2c = this->a30 = 0;
-    this->a0c = this->a10 = this->a14 = this->a18 = 0;  // 候補リスト(4要素)初期化
+    this->a0c = this->a10 = this->a14 = this->a18 = 0;  // init the 4-element candidate list
 
     for (i = 0; i < this->a08; i++) {
-        charId = <隊列スロットiからキャラIDを取得>;
-        if (charId != 1) {               // 主人公(キャラID1)のみ除外
-            candidate[compact_idx++] = charId;  // 4要素バッファに詰める（境界チェック無し）
+        charId = <get character ID from formation slot i>;
+        if (charId != 1) {               // exclude only the Hero (character ID 1)
+            candidate[compact_idx++] = charId;  // pack into the 4-element buffer (no bounds check)
         }
     }
 }
 ```
 
-要点:
-- 除外されるのはキャラID1（主人公）のみ。他のキャラIDに対する除外条件は存在しない。
-- 候補リストを格納するバッファ（`a0c`/`a10`/`a14`/`a18`）は物理的に4要素しかなく、
-  5個目以降の候補を弾く境界チェックが存在しない。5個目を詰めようとした場合、
-  バッファ直後に隣接するフィールド（`a1c`、本来は選択結果flag ID格納用）を上書きする。
+Key points:
+- The only character excluded is character ID 1 (the Hero). No exclusion
+  condition exists for any other character ID.
+- The buffer holding the candidate list (`a0c`/`a10`/`a14`/`a18`) physically
+  has only 4 elements, and there is no bounds check to reject a 5th or
+  later candidate. Attempting to pack a 5th candidate overwrites the field
+  adjacent to the buffer (`a1c`, originally meant to hold the selection-
+  result flag ID).
 
-## `PartyChangeMenu::onResult`（選択結果処理、file offset `0x107734`）
+## `PartyChangeMenu::onResult` (selection-result handling, file offset `0x107734`)
 
 ```c
 void PartyChangeMenu::onResult(this, result_code) {
-    cursor = this->a9a0;                 // 現在のカーソル位置
-    if (result_code == 0) return;        // 未確定
-    if (result_code == 1) {              // 決定
-        tag = this->a0c[cursor];         // 候補配列から選択されたキャラIDを取得
+    cursor = this->a9a0;                 // current cursor position
+    if (result_code == 0) return;        // not yet decided
+    if (result_code == 1) {              // confirmed
+        tag = this->a0c[cursor];         // get the selected character ID from the candidate array
         if (tag == 2) this->a30 = this->a1c;
         else if (tag == 4) this->a30 = this->a20;
         else if (tag == 5) this->a30 = this->a24;
         else if (tag == 6) this->a30 = this->a28;
-        // tagが上記4値のいずれでもない場合、a30はこの分岐では更新されない
-        if (this->a08 - 1 == cursor) {   // カーソルが候補リストの最後の位置と一致するなら
-            this->a30 = this->a2c;       // 無条件で上書き
+        // if tag matches none of the above 4 values, a30 is not updated in this branch
+        if (this->a08 - 1 == cursor) {   // if the cursor matches the last position in the candidate list
+            this->a30 = this->a2c;       // unconditionally overwritten
         }
-    } else if (result_code == 2) {       // キャンセル
+    } else if (result_code == 2) {       // cancel
         this->a30 = this->a2c;
     } else if (result_code == 4) {
-        <別の共通処理へ、詳細未解析>;
+        <branches to another shared routine, unanalyzed in detail>;
     }
 }
 ```
 
-要点:
-- 候補配列に入っているキャラIDのうち、`2/4/5/6`という4つの固定値のみが
-  `initialize`で受け取った対応するflag ID（`a1c`/`a20`/`a24`/`a28`）への割り当て
-  対象になっている。これ以外のキャラID値（候補に含まれ得る他のID）は、このif連鎖
-  では処理されない。
-- カーソル位置が「候補リストの最後の1枠」と一致する場合は、上記のキャラID判定結果に
-  関わらず無条件で`a2c`（フォールバック/キャンセル用flag ID）が採用される。この挙動は
-  「キャンセル操作」と「候補リスト末尾の選択」のどちらでも同一のflagが立つことを意味する。
-- 選択結果は、スクリプト側からは`isEnd`が立てる`type=2`フラグの状態としてのみ観測できる
-  （個別の戻り値レジスタ等は介さない）。
+Key points:
+- Of the character IDs that can appear in the candidate array, only the 4
+  fixed values `2/4/5/6` are targets for assignment to their corresponding
+  flag ID received by `initialize` (`a1c`/`a20`/`a24`/`a28`). Any other
+  character ID value that could appear in the candidate list is not
+  handled by this if-chain.
+- If the cursor position matches "the last slot in the candidate list,"
+  `a2c` (the fallback/cancel flag ID) is adopted unconditionally,
+  regardless of the character-ID determination above. This means the same
+  flag is set for both a "cancel operation" and "selecting the last entry
+  in the candidate list."
+- The selection result is observable from the script side only through the
+  state of the `type=2` flag that `isEnd` sets (no individual return-value
+  register or similar is involved).
 
-## `TownFormationMenu`（別クラス、汎用実装）
+## `TownFormationMenu` (a separate class, generic implementation)
 
-`PartyChangeMenu`とは名称が類似するが実装は独立しており、キャラIDのハードコード
-判定を一切含まない。
+Despite a similarly-sounding name to `PartyChangeMenu`, its implementation
+is independent and contains no hardcoded character-ID determination at all.
 
 ```c
 void TownFormationMenu::onOpen(this) {
     count = PlayerParty::getInstance()->b8;
     this->a0c = count;
-    this->a08 = (count >= 1);  // スロット0の「編成に含める」フラグ(bool)
+    this->a08 = (count >= 1);  // slot 0's "include in formation" flag (bool)
     this->a09 = (count >= 2);
     this->a0a = (count >= 3);
     this->a0b = (count >= 4);
@@ -115,42 +128,49 @@ void TownFormationMenu::onOpen(this) {
 void TownFormationMenu::onDraw(this) {
     count = PlayerParty::getInstance()->b8;
     for (i = 0; i < count; i++) {
-        if (<スロットiの「編成に含める」フラグが1>) {
-            charId = <隊列スロットiのキャラID>;
-            <汎用ステータス取得・行描画(スロット単位)>;
+        if (<slot i's "include in formation" flag is 1>) {
+            charId = <character ID of formation slot i>;
+            <generic status retrieval / row rendering (per slot)>;
         }
     }
 }
 ```
 
-要点:
-- 添字`i`は隊列配列のスロット番号であり、キャラIDそのものではない。
-- 各スロットの表示可否は、キャラIDに基づく分岐ではなく、スロットごとに独立した
-  ON/OFFフラグで決まる。
-- `onResult`相当の処理も汎用ユーティリティ経由でスロット位置を操作しており、
-  キャラID比較は登場しない。
+Key points:
+- Subscript `i` is a formation-array slot number, not a character ID
+  itself.
+- Whether each slot is shown is determined not by a branch on character
+  ID, but by an independent on/off flag per slot.
+- The `onResult`-equivalent processing also manipulates slot positions via
+  a generic utility; no character-ID comparison appears.
 
-## 2クラスの設計上の違い（まとめ）
+## Design differences between the two classes (summary)
 
 | | `PartyChangeMenu` | `TownFormationMenu` |
 |---|---|---|
-| 候補/対象の単位 | キャラID（一部ハードコード） | 隊列スロット番号 |
-| 選択結果の反映方式 | キャラID値の4パターンif分岐 + フォールバック | スロット単位の汎用ON/OFF |
-| 候補バッファの上限 | 4要素固定（境界チェック無し） | 隊列人数に追従 |
-| 除外対象 | キャラID1（主人公）固定 | なし（スロット単位で判定） |
+| Unit of candidate/target | Character ID (partially hardcoded) | Formation slot number |
+| How the selection result is reflected | 4-pattern if-branch on character-ID value + fallback | Generic per-slot on/off |
+| Candidate buffer limit | Fixed at 4 elements (no bounds check) | Tracks the party headcount |
+| Excluded target | Character ID 1 (the Hero), fixed | None (determined per slot) |
 
-## 関連関数（未解析・未確定）
+## Related functions (unanalyzed/unconfirmed)
 
-- `TriggerPartyChange::onStart`（file offset `0x18aae4`）: `PlayerManager::getInstance()`
-  を呼ぶのみの薄い実装で、実際の起動条件は別途マップ/トリガー関連データの調査が必要。
-- `PlayerParty::reorder`（file offset `0x188c4c`）と、それを呼ぶ`fcn.0021a220`
-  （file offset `0x21a220`）内の、4つの固定グローバルから値を読み「0でなくかつ7未満」
-  のものだけを採用するハードコードされた`id<7`境界チェック。通常のパーティ変更処理とは
-  別系統（特殊な強制パーティ構成関連と推定）。
+- `TriggerPartyChange::onStart` (file offset `0x18aae4`): a thin
+  implementation that only calls `PlayerManager::getInstance()`; the actual
+  trigger conditions require separate investigation of map/trigger-related
+  data.
+- `PlayerParty::reorder` (file offset `0x188c4c`) and, inside its caller
+  `fcn.0021a220` (file offset `0x21a220`), a hardcoded `id<7` bounds check
+  that reads values from 4 fixed globals and adopts only those that are
+  "nonzero and less than 7." This is a separate system from normal party-
+  change processing (presumed related to special, forced party
+  configurations).
 
-## 未確定・未解明の点
+## Unconfirmed / unresolved points
 
-- opcode番号から`CmdOpenPartyChangeMenu::initialize`への実行時ディスパッチ経路そのもの。
-- `TownFormationMenu`が実際にどの場面・どの呼び出し経路（スクリプト経由か、C++側の
-  直接トリガーか）で開かれるか。
-- `Message::SetMacro`相当の呼び出しが選択結果の話者名差し込みにどう使われているかの詳細。
+- The actual runtime dispatch path from an opcode number to
+  `CmdOpenPartyChangeMenu::initialize`.
+- Exactly which scene/call path (via script, or a direct C++-side trigger)
+  actually opens `TownFormationMenu`.
+- Details of how a `Message::SetMacro`-equivalent call is used to insert
+  the speaker's name into the selection result.

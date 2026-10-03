@@ -1,18 +1,19 @@
-# モーション解決パイプライン（`MotionIndexManager` / `MotionIndexJobManager`）
+# Motion Resolution Pipeline (`MotionIndexManager` / `MotionIndexJobManager`)
 
-フィールド・戦闘中のキャラクターが「どの`.pack.lz`内クリップを再生するか」を
-解決する仕組み。ARM32コード(`code.decompressed.bin`)の静的解析と、修正パッチの
-実機検証によって確定した構造。
+The mechanism that resolves "which clip inside a `.pack.lz`" a character
+should play, during field exploration or battle. Structure confirmed via
+static analysis of the ARM32 code (`code.decompressed.bin`) and
+real-hardware verification of modification patches.
 
-## 全体ディスパッチ: `CharacterObject::getMotionIndex` (file offset `0x1853dc`)
+## Overall dispatch: `CharacterObject::getMotionIndex` (file offset `0x1853dc`)
 
-`CharacterObject`の`+0x94`にある「カテゴリタグ」で分岐する:
+Branches on the "category tag" at `+0x94` of `CharacterObject`:
 
 ```c
 int CharacterObject::getMotionIndex(this, motionType) {
     switch (this->+0x94) {
-    case 0x1000000: // person(プレイアブル)
-    case 0x3000000: // person variant(操作中スロット等)
+    case 0x1000000: // person (playable)
+    case 0x3000000: // person variant (e.g. currently-controlled slot)
         slot = this->+0x8c;
         if (slot < 7)
             return MotionIndexJobManager::getInstance()
@@ -21,7 +22,7 @@ int CharacterObject::getMotionIndex(this, motionType) {
             return MotionIndexManager::getInstance()
                      ->getCharacterMotionIndex(*(this+0x90), motionType);
 
-    case 0x2000000: // NPC/モンスター(戦闘寄りの扱い)
+    case 0x2000000: // NPC/monster (treated more on the battle side)
         idx = this->+0x8c;
         if (idx < 7 || idx == 0x34)
             return MotionIndexJobManager::getInstance()->getJobBattleMotionIndex(
@@ -35,7 +36,7 @@ int CharacterObject::getMotionIndex(this, motionType) {
         else
             return MotionIndexManager::getInstance()->getBattleMotionIndex(motionType, idx);
 
-    case 0x4000000: // モンスター
+    case 0x4000000: // monster
         return MotionIndexManager::getInstance()->getMonsterMotionIndex(
                  motionType, LevelDataUtility::getBaseMonsterNo(this->+0x8c));
 
@@ -45,9 +46,9 @@ int CharacterObject::getMotionIndex(this, motionType) {
 }
 ```
 
-関連シンボル（file offset、素のROMベース）:
+Related symbols (file offset, base-ROM basis):
 
-| file offset | シンボル |
+| file offset | symbol |
 |---|---|
 | `0x184ac8` | `MotionIndexJobManager::getInstance` |
 | `0x185000` | `MotionIndexManager::getInstance` |
@@ -59,16 +60,19 @@ int CharacterObject::getMotionIndex(this, motionType) {
 | `0x23e38` | `MotionIndexManager::getCharacterMotionIndex` |
 | `0x263b0` | `MotionIndexJobManager::getJobCharacterMotionIndex` |
 | `0x18390c` | `MotionIndexManager::readFile` |
-| `0x1949d8` | `ExcelBinaryData::getRecordDynamic`（汎用レコード引き） |
+| `0x1949d8` | `ExcelBinaryData::getRecordDynamic` (generic record lookup) |
 | `0x194990` / `0x1949ac` | `HaveJob::getJobLevel` / `HaveJob::setJobLevel` |
 | `0x123880` | `HaveJob::change` |
 
-`MotionIndexJobManager`（job関連探索専用）と`MotionIndexManager`（汎用・モンスター含む）は
-別クラスだが、いずれも内部のテーブル探索に`ExcelBinaryData::getRecordDynamic`を共通で使う。
+`MotionIndexJobManager` (dedicated to job-related lookups) and
+`MotionIndexManager` (general-purpose, including monsters) are separate
+classes, but both use `ExcelBinaryData::getRecordDynamic` in common for
+their internal table lookups.
 
-## ファイル読み込みパターン
+## File-loading pattern
 
-`MotionIndexManager::readFile`は`"%s.idx"`という書式でパスを組み立てる。候補文字列:
+`MotionIndexManager::readFile` assembles its path using the format
+`"%s.idx"`. Candidate strings:
 
 ```
 CHARACTER/person   → CHARACTER/person.idx
@@ -78,41 +82,47 @@ WEAPON/weapon      → WEAPON/weapon.idx
 GOODS/goods        → GOODS/goods.idx
 ```
 
-`CHARACTER/`配下には`person.idx`以外に`person.jidx`（job variant用）、
-`person.matidx`、`person.jmatidx`という兄弟ファイルも存在する。
-`BATTLE/`配下には同様に`battle.jidx`が存在する。
+Under `CHARACTER/`, in addition to `person.idx` there are also sibling
+files `person.jidx` (for job variants), `person.matidx`, and
+`person.jmatidx`. Under `BATTLE/`, `battle.jidx` similarly exists.
 
-## `person.jidx` / `battle.jidx` の確定構造
+## Confirmed structure of `person.jidx` / `battle.jidx`
 
-両ファイルとも同一レイアウト（`battle.jidx`は`MotionIndexJobManager::getJobBattleMotionIndex`
-(`0x26214`)が読む、戦闘用の対応物）:
+Both files share the same layout (`battle.jidx` is the battle-use
+counterpart, read by
+`MotionIndexJobManager::getJobBattleMotionIndex` (`0x26214`)):
 
 ```
 header: u16 count
-record (6byte, count件):
-  +0x00 u16 characterId   (1=主人公, 2=マリベル, 3=キーファ, 4=ガボ, 5=メルビン, 6=アイラ)
-  +0x02 u16 jobId         (0=無職 〜 20)
-  +0x04 u16 subOffset     (ファイル先頭=header直後からの絶対オフセット)
+record (6 bytes, count entries):
+  +0x00 u16 characterId   (1=Hero, 2=Maribel, 3=Kiefer, 4=Gabo, 5=Melvin, 6=Aira)
+  +0x02 u16 jobId         (0=jobless ... 20)
+  +0x04 u16 subOffset     (absolute offset from the start of the file = right after the header)
 
-サブブロック（各recordのsubOffsetが指す先）:
-  {u16 motionKey, u16 result} の配列
-  motionKeyは dq7_motion_list.dat のモーションタイプID、resultは
-  .pack.lz内アニメクリップの解決に使われる最終的なモーションIndex
+sub-block (pointed to by each record's subOffset):
+  an array of {u16 motionKey, u16 result}
+  motionKey is a motion-type ID from dq7_motion_list.dat; result is the
+  final motion index used to resolve an animation clip inside .pack.lz
 ```
 
-- `characterId`×`jobId`の組み合わせでレコードを引き、見つからなければ`-1`を返す
-  （＝そのキャラクターは該当ジョブのモーションが一切紐付かない）。
-- 素のROMでは、本編プレイアブル6人のうち5人（主人公・マリベル・ガボ・メルビン・アイラ）は
-  `jobId=0〜20`の全21レコードが揃っているが、**キーファ(characterId=3)だけ
-  `jobId=0`（無職）のレコード1件のみ**で、`jobId=1`以降のレコードが存在しない
-  （転職を想定しないキャラクターとして開発されたことの直接的なデータ上の反映）。
-- `getJobCharacterMotionIndex`(`0x263b0`)は`record[+0]`(characterId)を
-  `*(CharacterObject+0x90)`経由の導出値と比較し、`record[+2]`(jobId)を
-  `[CharacterObject+0x98]`の生値と比較する2軸一致探索。
+- A record is looked up by the combination of `characterId` × `jobId`; if
+  not found, `-1` is returned (meaning that character has no motion
+  linked for that job at all).
+- In the base ROM, 5 of the 6 main-story playable characters (Hero,
+  Maribel, Gabo, Melvin, Aira) have all 21 records for `jobId=0-20`, but
+  **Kiefer (characterId=3) has only a single record for `jobId=0`
+  (jobless)**, with no records from `jobId=1` onward (a direct, data-level
+  reflection of the fact he was developed as a character not meant to
+  change jobs).
+- `getJobCharacterMotionIndex` (`0x263b0`) performs a 2-axis matching
+  lookup, comparing `record[+0]` (characterId) against a value derived via
+  `*(CharacterObject+0x90)`, and `record[+2]` (jobId) against the raw
+  value at `[CharacterObject+0x98]`.
 
-## `CharacterObject::setMotion` のモーションタイプエイリアス
+## Motion-type aliasing in `CharacterObject::setMotion`
 
-`setMotion(this, motionType, ...)`内でコード側にハードコードされた置換ロジック:
+A hardcoded substitution on the code side, inside
+`setMotion(this, motionType, ...)`:
 
 ```c
 if (motionType == 100 /*idle*/) motionType = 0;
@@ -121,60 +131,69 @@ else if (motionType == 130 /*dash2*/) motionType = 102 /*dash*/;
 idx = getMotionIndex(this, motionType);
 ```
 
-## `LEVELDATA/dq7_motion_list.dat`（モーションタイプの「ID→名前」対応表）
+## `LEVELDATA/dq7_motion_list.dat` (motion-type "ID → name" correspondence table)
 
 ```
-header: u32 magic, u32 nrec(228), u32 rsize(28), u32 nrec_dup(228), u32 reserved  ; 計20byte
-record (28byte):
+header: u32 magic, u32 nrec(228), u32 rsize(28), u32 nrec_dup(228), u32 reserved  ; 20 bytes total
+record (28 bytes):
   +0x00 u32 self_index
-  +0x07 char[20] 名前(NUL終端)
-  +0x1B u8  flag(0/1、意味未確定)
+  +0x07 char[20] name (NUL-terminated)
+  +0x1B u8  flag (0/1, meaning unconfirmed)
 ```
 
-既知の対応（主要なもの）: `100=idle`, `101=run`, `102=dash`, `103=pop`, `104=out`, `130=dash2`。
+Known correspondences (the main ones): `100=idle`, `101=run`, `102=dash`,
+`103=pop`, `104=out`, `130=dash2`.
 
-## `CHARACTER/MotionListTable.dat`（キャラ非依存の共通テーブル）
+## `CHARACTER/MotionListTable.dat` (character-independent common table)
 
 ```
 header: u16 count(224)
-record (4byte): u16 a(dq7_motion_list.datのID), u16 b(クリップ実体の参照先)
+record (4 bytes): u16 a (ID from dq7_motion_list.dat), u16 b (reference target for the actual clip)
 ```
 
-ほぼ全件`b==a`（自己参照）。例外3件（`idle(100)→0`, `pop(103)→2`, `out(104)→3`）は
-バトル用の同名モーションをフィールド版が使い回すエイリアス。
+Almost all records have `b==a` (self-reference). The 3 exceptions
+(`idle(100)→0`, `pop(103)→2`, `out(104)→3`) are aliases where the field
+version reuses the same-named motion intended for battle.
 
-## `HaveJob`（ランタイムオブジェクト、キャラごとの職業状態）
+## `HaveJob` (runtime object, per-character job state)
 
 ```
 HaveJob
-+0x04  u8     currentJob（現在の職業ID）
-+0x05  u8[55] jobLevel[job_id]（職業ごとの習熟度・星0〜8、job_id=0〜54）
++0x04  u8     currentJob (current job ID)
++0x05  u8[55] jobLevel[job_id] (proficiency per job, star rank 0-8, job_id=0-54)
 ```
 
-`HaveJob::change(this, jobId)`は`currentJob`を書き換えるだけで、転職可否の判定は
-行わない（存在するなら`jobLevel[jobId]`が0の場合に1へ底上げするのみ）。
+`HaveJob::change(this, jobId)` only rewrites `currentJob`; it does not
+check whether the job change is allowed (at most, if `jobLevel[jobId]` is
+0 it bumps it up to 1).
 
-`dq7_player_job.dat`: 55レコード×188byte。`ExcelBinaryData::getRecordDynamic`
-(`0x1949d8`)は直接インデックスアクセス: `record = job_id × recordSize + (header_ptr + 0x14)`
-（`recordSize`は静的ディスクリプタの`+8`）。
+`dq7_player_job.dat`: 55 records × 188 bytes.
+`ExcelBinaryData::getRecordDynamic` (`0x1949d8`) performs direct index
+access: `record = job_id × recordSize + (header_ptr + 0x14)` (`recordSize`
+is `+8` of the static descriptor).
 
-## セーブデータ内の職業別starレベル配列
+## Per-job star-level array inside save data
 
-キャラクターレコード内、`job`（現在職業、相対`+0x0038`）の直後`+0x0039`から
-`55byte`の配列が存在し、`job_id`をそのまま添字とする「職業別starレベル」を保持する
-（`webapp/save_editor.py`の`CHAR_JOB_LEVELS_OFFSET=0x0039`/`CHAR_JOB_LEVELS_COUNT=55`）。
+Within a character record, right after `job` (current job, relative
+`+0x0038`) there is a 55-byte array starting at `+0x0039`, holding
+per-"job-specific star level," indexed directly by `job_id`
+(`webapp/save_editor.py`'s `CHAR_JOB_LEVELS_OFFSET=0x0039` /
+`CHAR_JOB_LEVELS_COUNT=55`).
 
-## フィールドとバトルで参照系統が異なる点
+## Field and battle use different reference paths
 
-同一のキャラクター識別子・モデル差し替えでも、フィールド表示とバトル表示は
-別の参照経路を通る（`getMotionIndex`のカテゴリ`0x1000000`/`0x3000000`がフィールド寄り、
-`0x2000000`が戦闘寄り）。RomFSのモデル/アニメファイルを差し替える検証をする際は、
-フィールド・バトルの両方を個別に確認する必要がある。
+Even for the same character identifier/model swap, field display and
+battle display go through different reference paths (`getMotionIndex`'s
+categories `0x1000000`/`0x3000000` lean toward field, `0x2000000` leans
+toward battle). When verifying a swap of RomFS model/animation files, both
+field and battle must be checked individually.
 
-## `.pack.lz`内クリップ選択は名前ではなく位置インデックスで行われる
+## Clip selection inside `.pack.lz` is by position index, not by name
 
-`SkeletalAnims`辞書は文字列キー付きだが、実際の再生時のクリップ選択は
-辞書内の**並び順（インデックス番号）**に基づく。`person.jidx`/`battle.jidx`の
-`result`フィールド（モーションIndex）は、このクリップリスト内の位置を指定する
-インデックスとして使われる。このため、クリップ構成・並び順が異なるデータ同士を
-入れ替えると、名前が一致していても全く別のモーションが再生される場合がある。
+The `SkeletalAnims` dictionary has string keys, but the clip actually
+selected for playback at runtime is based on **order (index number)**
+within the dictionary. The `result` field (motion index) of
+`person.jidx`/`battle.jidx` is used as an index specifying a position
+within this clip list. Because of this, swapping between data whose clip
+composition/order differs, even if the names match, can result in a
+completely different motion being played.

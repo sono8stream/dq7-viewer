@@ -1,49 +1,58 @@
-# キャラクタービジュアルアセットの配置規則
+# Character Visual Asset Layout Rules
 
-DQ7(3DS)のキャラ関連ビジュアルは種類ごとに別ディレクトリに分かれている。
+DQ7's (3DS) character-related visuals are split into separate directories
+by type.
 
-| 種類 | 置き場所 | 形式 |
+| Kind | Location | Format |
 | --- | --- | --- |
-| 3Dモデル本体 | `CHARACTER/pXXXX_jNN.bcmdl.lz` | LZ11圧縮 CGFX |
-| モデル用テクスチャ | 上記`.bcmdl.lz`のCGFX内(TXOBチャンクに埋め込み) | CGFX内 TXOB(ETC1/RGBA等) |
-| アニメ | `CHARACTER/pXXXX_jNN.pack.lz` | LZ11圧縮 PackData(中はCGFX/CANM) |
-| メニューの顔グラ | `TEXTURE/pXXXX_jNN_face.bctex.lz` | LZ11圧縮 BCTEX(単体) |
-| 転職プレビューポートレート | `SCREENTEX/job/p%04d_j%02d.fpt.lz` | type-0x40圧縮 FPT0コンテナ |
-| 戦闘モーションデータ | `LEVELDATA/dq7_btl_motion_job_*.dat` | 独自（ファイル名の内容は後述） |
-| キャラ→モデル名の対応 | `LEVELDATA/dq7_chara_list.dat` | 84byte/レコード、先頭付近に`pXXXX`のASCII文字列 |
-| ジョブ定義 | `LEVELDATA/dq7_player_job.dat` | 独自(ヘッダ: count=55, recsize=188) |
+| 3D model body | `CHARACTER/pXXXX_jNN.bcmdl.lz` | LZ11-compressed CGFX |
+| Model texture | Embedded inside the above `.bcmdl.lz`'s CGFX (in TXOB chunks) | TXOB inside CGFX (ETC1/RGBA, etc.) |
+| Animation | `CHARACTER/pXXXX_jNN.pack.lz` | LZ11-compressed PackData (contains CGFX/CANM) |
+| Menu face graphic | `TEXTURE/pXXXX_jNN_face.bctex.lz` | LZ11-compressed BCTEX (standalone) |
+| Job-change preview portrait | `SCREENTEX/job/p%04d_j%02d.fpt.lz` | type-0x40 compressed FPT0 container |
+| Battle motion data | `LEVELDATA/dq7_btl_motion_job_*.dat` | Custom (see below for file name meaning) |
+| Character → model name mapping | `LEVELDATA/dq7_chara_list.dat` | 84 bytes/record, ASCII string `pXXXX` near the start |
+| Job definitions | `LEVELDATA/dq7_player_job.dat` | Custom (header: count=55, recsize=188) |
 
-- `pXXXX`は`dq7_chara_list.dat`のレコード順に対応するモデルアセット番号。
-  本編プレイアブル6人は`p0001`〜`p0006`と小さい番号だが、これは単なる
-  モデルアセットのカタログ順であり、`p0007`以降はNPC/モンスター等が
-  混在する（「モデル番号＝キャラID」という対応は先頭6件だけの偶然）。
-- `jNN`はジョブ番号。恒常パーティメンバーは`j00`〜`j20`の21スロット分、
-  `CHARACTER/*.bcmdl.lz` / `*.pack.lz` / `TEXTURE/*_face.bctex.lz`が
-  フルで存在する。
-- `dq7_btl_motion_job_*.dat`というファイル名の`job`は開発時の内部ラベルに
-  過ぎず、内容は**モンスター別**の戦闘モーションデータ（ファイル名自体に
-  モンスター名が使われている）。プレイアブルキャラの職業別戦闘モーションが
-  どこに格納されているかは別系統（各jobの`.pack.lz`アニメパック内に直接
-  含まれている可能性が高い）。
+- `pXXXX` is the model asset number corresponding to the record order in
+  `dq7_chara_list.dat`. The 6 main-story playable characters use small
+  numbers `p0001`–`p0006`, but this is simply the catalog order of model
+  assets — `p0007` onward is a mix of NPCs/monsters/etc. (the mapping
+  "model number = character ID" is a coincidence that only holds for the
+  first 6 entries).
+- `jNN` is the job number. Permanent party members have the full set for
+  21 slots, `j00`–`j20`, across `CHARACTER/*.bcmdl.lz` / `*.pack.lz` /
+  `TEXTURE/*_face.bctex.lz`.
+- The `job` in the file name `dq7_btl_motion_job_*.dat` is merely an
+  internal development label — the content is actually battle motion data
+  **per monster** (the monster's name itself is used in the file name).
+  Where playable characters' per-job battle motion is stored is a separate
+  system (likely included directly inside each job's `.pack.lz` animation
+  pack).
 
-## `.pack.lz`内のアニメクリップ名エンコード
+## Animation clip name encoding inside `.pack.lz`
 
-`CHARACTER/pXXXX_jNN.pack.lz`（CGFXアニメパック）内のアニメクリップ名は、
-`pXXXX_jNN_idle`のようにキャラ番号・ジョブ番号込みの文字列としてエンコードされている。
-LZ11圧縮データの後方参照構造上、同一の接頭辞文字列が複数クリップ名で共有される場合、
-その接頭辞は圧縮ストリーム中の単一のリテラル領域への後方参照としてまとめて
-符号化されていることがある（この場合、その1箇所だけを書き換えれば全出現箇所が
-一括で変わる。ただし他の無関係な文字列が偶然同じバイト列を共有して後方参照する
-ケースもあるため、書き換え前に「どのリテラル領域が実際にどの出現箇所から
-参照されているか」を後方参照の追跡で確認する必要がある）。
+Animation clip names inside `CHARACTER/pXXXX_jNN.pack.lz` (a CGFX animation
+pack) are encoded as strings that include the character number and job
+number, like `pXXXX_jNN_idle`. Due to the back-reference structure of
+LZ11-compressed data, when the same prefix string is shared across
+multiple clip names, that prefix may be encoded as a single literal region
+referenced by back-references collectively (in this case, rewriting just
+that one spot changes every occurrence at once. However, there are also
+cases where other, unrelated strings happen to share the same byte
+sequence and back-reference it, so before rewriting you need to trace the
+back-references to confirm which literal region is actually referenced by
+which occurrence).
 
-## `SCREENTEX/job/*.fpt.lz`（転職プレビューポートレート）
+## `SCREENTEX/job/*.fpt.lz` (job-change preview portraits)
 
-転職先選択画面が参照するファイル。`.fpt.lz`はLZ11ではなく、先頭バイト上位ニブルが
-`0x40`のtype-0x40（LZ77+二重Huffman圧縮）形式。展開すると`FPT0`コンテナ
-（64×64の`texNNN.dmp`タイル16枚 + `size.dat` → 256×256に再構成）になる。
+A file referenced by the job selection screen. `.fpt.lz` is not LZ11 — it's
+a type-0x40 format (LZ77 + dual Huffman compression) whose leading byte's
+upper nibble is `0x40`. Once decompressed, it becomes an `FPT0` container
+(16 tiles of 64×64 `texNNN.dmp` + `size.dat` → reassembled into 256×256).
 
-## `dq7_picture_character.dat`（272byte）
+## `dq7_picture_character.dat` (272 bytes)
 
-`[charId][?][?][ff] [u16 x][u16 y]...`という形のレコードらしき構造を持つ
-（用途・全フィールドの意味は未確認）。
+Appears to have a record-like structure of the form
+`[charId][?][?][ff] [u16 x][u16 y]...` (purpose and the meaning of all
+fields are unconfirmed).

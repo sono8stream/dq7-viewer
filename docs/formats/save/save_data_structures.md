@@ -1,177 +1,185 @@
-# セーブデータ (`save00N.bin`) の構造
+# Save Data (`save00N.bin`) Structure
 
-## 全体レイアウト
+## Overall Layout
 
-セーブファイルは`SaveDataSerialize`が管理する複数のサブオブジェクトを
-連続して並べたコンテナ構造である。各サブオブジェクトは共通して
-「4byte ASCIIマジック + version(4byte) + size(4byte) + 予約(4byte)」
-という16byteヘッダを持ち、その直後にデータ本体が続く。
+The save file is a container structure in which `SaveDataSerialize` manages
+multiple sub-objects laid out consecutively. Each sub-object commonly has a
+16-byte header of "4-byte ASCII magic + version (4 bytes) + size (4 bytes) +
+reserved (4 bytes)", immediately followed by the data body.
 
-6人編成（未パッチの基本フォーマット）の場合の実際のオフセット（実際の
-正規セーブファイルを走査して確認済み）:
+Actual offsets for the 6-member party (the unpatched base format), confirmed
+by scanning an actual legitimate save file:
 
-| オフセット | マジック | サイズ | 内容 |
+| Offset | Magic | Size | Contents |
 |---|---|---|---|
-| `0x10` | `FLAG` | 592byte | GameFlag（フラグのビット配列） |
-| `0x260` | `STGE` | 672byte | StageInfo（現在地・教会復帰情報） |
-| `0x500` | `PRTY` | 1904byte | PartyStatus（隊列・所持金・バンク・カジノ・アイテム袋） |
-| `0xc70` | `FLAG` | - | PlayerDataContainerのヘッダ（GameFlagとは別の構造・同名マジック） |
-| `0xc80`〜 | `DATA`×6 | 各492byte | PlayerData（キャラクター1人分、6人分連続） |
-| `0x1810` | `OPTN` | 32byte | 未特定 |
-| `0x1830` | `FLAG` | 6496byte | BattleResult（モンスター図鑑・討伐数等の戦績データ。GameFlagとは別インスタンスで、同名マジックを再利用しているだけ） |
-| `0x3190` | `STRY` | 176byte | StoryStatus（章番号） |
-| `0x3240` | `GAME` | 32byte | 未特定 |
-| `0x3260` | `WLDA` | 48byte | WorldAtlas（ワールドマップの現在地・向き・乗り物状態） |
-| `0x3290` | `SCRP` | 48byte | 未特定（Script関連と推定） |
-| `0x32c0` | `SURE` | 3824byte | すれちがい関連（`DQ7SurechigaiBox`等） |
-| `0x41b0` | `IMIN` | 3568byte | イミン村関連（`IminnMenuMain`等） |
-| `0x4fa0` | `SILS` | 48byte | 未特定 |
+| `0x10` | `FLAG` | 592 bytes | GameFlag (flag bit array) |
+| `0x260` | `STGE` | 672 bytes | StageInfo (current location / church-return info) |
+| `0x500` | `PRTY` | 1904 bytes | PartyStatus (formation, gold, bank, casino, item bag) |
+| `0xc70` | `FLAG` | - | PlayerDataContainer header (a different structure from GameFlag that reuses the same magic) |
+| `0xc80`~ | `DATA`×6 | 492 bytes each | PlayerData (one character each, 6 in a row) |
+| `0x1810` | `OPTN` | 32 bytes | unidentified |
+| `0x1830` | `FLAG` | 6496 bytes | BattleResult (monster-book/kill-count battle record data; a separate instance from GameFlag that just reuses the same magic) |
+| `0x3190` | `STRY` | 176 bytes | StoryStatus (chapter number) |
+| `0x3240` | `GAME` | 32 bytes | unidentified |
+| `0x3260` | `WLDA` | 48 bytes | WorldAtlas (world-map current location, facing, vehicle state) |
+| `0x3290` | `SCRP` | 48 bytes | unidentified (estimated to be script-related) |
+| `0x32c0` | `SURE` | 3824 bytes | StreetPass-related (`DQ7SurechigaiBox` etc.) |
+| `0x41b0` | `IMIN` | 3568 bytes | Imin Village-related (`IminnMenuMain` etc.) |
+| `0x4fa0` | `SILS` | 48 bytes | unidentified |
 
-7人化（`matilda_7slot`系の改造パッチ）を適用した場合、`PlayerDataContainer`の
-サイズフィールドが`0xB98`→`0xD84`(16+7×0x1EC)に変わり、`DATA`レコードが7件分
-(492byte×7)に増えるぶん、それ以降の全ブロックのオフセットが一律+496byte
-後ろにずれる。
+When the 7-member party mod (the `matilda_7slot`-series patch) is applied,
+`PlayerDataContainer`'s size field changes from `0xB98` to `0xD84`
+(16+7×0x1EC), and because the `DATA` records increase to 7 entries
+(492 bytes × 7), every block after it shifts uniformly by +496 bytes.
 
-## PlayerDataContainer / PlayerData（キャラクターレコード）
+## PlayerDataContainer / PlayerData (character records)
 
-### コンテナヘッダ
+### Container header
 
 ```
 +0x00 "FLAG"           magic
 +0x04 0x00010000       version
-+0x08 size             getSerializeSize()の合計値(6人=0xB98, 7人=0xD84)
-+0x0c 0                予約
-+0x10 DATAレコード×N   （Nは生存キャラ数、492byte刻み）
++0x08 size             total from getSerializeSize() (6 members = 0xB98, 7 members = 0xD84)
++0x0c 0                reserved
++0x10 DATA records × N (N = number of living characters, in 492-byte increments)
 ```
 
-### PlayerData（1キャラクター分、`DATA`レコード、492byte = 0x1EC）
+### PlayerData (one character, `DATA` record, 492 bytes = 0x1EC)
 
 ```
 +0x00 "DATA"           magic
 +0x04 0x00010000       version
 +0x08 0x000001EC       size
-+0x0c 0                予約
-+0x10〜 本体データ      （ステータス・装備・文字列フィールド等）
++0x0c 0                reserved
++0x10~ body data        (status, equipment, string fields, etc.)
 ```
 
-インメモリ上は、キャラクター1人分のレコードが1064byte刻みで並んでおり、
-各レコードの先頭8byteをスキップした位置から0x1EC(492)byteが、ほぼそのまま
-オンディスクのレコード本体（上記`+0x10`以降に相当する範囲）と一致する。
-文字列フィールド（装備品名等）はインメモリ上は別領域に格納されており、
-シリアライズ時に`memcpy_s`で該当フィールドへ詰め替えられる。
+In memory, one character's record is laid out in 1064-byte increments, and
+the 0x1EC (492) bytes starting right after skipping the first 8 bytes of
+each record match almost exactly the on-disk record body (the range
+corresponding to `+0x10` and onward above). String fields (equipment names,
+etc.) are stored in a separate in-memory region and are packed into the
+corresponding fields via `memcpy_s` at serialization time.
 
 ## GameFlag
 
-ビットフィールドの詳細仕様は[gameflag_bitfield.md](../exefs/gameflag_bitfield.md)を参照。
+See [gameflag_bitfield.md](../exefs/gameflag_bitfield.md) for the
+detailed bitfield specification.
 
-- ブロックヘッダ（16byte、ファイルオフセット`0x10`）: `FLAG`+version+size+予約
-- データ本体はヘッダ直後のファイルオフセット`0x20`から始まる
-  （`FLAGS_REGION_BASE = 0x20`）
-- type0のビットは`0x20 + flag_id//8`、type1のビットは`0x220 + flag_id//8`
-  （type0のバイト列から0x200byteずれた別バイト列。詳細は上記リンク先）
+- Block header (16 bytes, file offset `0x10`): `FLAG` + version + size + reserved
+- The data body starts at file offset `0x20`, right after the header
+  (`FLAGS_REGION_BASE = 0x20`)
+- type0 bits live at `0x20 + flag_id//8`, type1 bits at `0x220 + flag_id//8`
+  (a separate byte array offset by 0x200 bytes from the type0 array; see the
+  linked document for details)
 
 ## StageInfo
 
-- ヘッダ（16byte、ファイルオフセット`0x260`）: `STGE`+version 0x10000+size
-  `0x29c`(668)+予約
-- 本体には現在のマップID(2byte)・x/y/z座標(各4byte)に加えて、教会復帰用の
-  インデックス(2byte)、および各マップのNPC・家具オブジェクトの表示状態を
-  管理する`SymbolFlag`/`FurnFlag`ビット配列が同居している。
-- 現在地・座標のフィールドは、実際にセーブ処理が呼ばれた瞬間の値を書き込む
-  ためのものであり、他のタイミングで読んだ値をそのまま使うと不正な値に
-  なりうる。
-- `StageInfo::loadChurch`/`returnChurch`は、教会復帰インデックスから
-  `LEVELDATA/dq7_map_church.dat`テーブルの該当レコードを引き、実際の
-  マップID・座標を逆算して復帰先を決定する。
+- Header (16 bytes, file offset `0x260`): `STGE` + version 0x10000 + size
+  `0x29c` (668) + reserved
+- The body holds the current map ID (2 bytes), x/y/z coordinates (4 bytes
+  each), a church-return index (2 bytes), plus `SymbolFlag`/`FurnFlag` bit
+  arrays that track NPC/furniture object visibility per map.
+- The current-location/coordinate fields are meant to hold the value at the
+  exact moment save processing was invoked; using a value read at a
+  different time as-is can produce an invalid value.
+- `StageInfo::loadChurch`/`returnChurch` look up the corresponding record in
+  the `LEVELDATA/dq7_map_church.dat` table from the church-return index and
+  back-calculate the actual map ID/coordinates to determine the return
+  destination.
 
-### `dq7_map_church.dat`（教会テーブル）フォーマット
-
-```
-offset 0x00: 固定値(0x5302、意味未解明)
-offset 0x04: レコード数 (89)
-offset 0x08: ストライド (0x20 = 32byte)
-offset 0x0c: レコード数の重複フィールド
-offset 0x14: レコード配列開始
-```
-
-各レコード(32byte):
+### `dq7_map_church.dat` (church table) format
 
 ```
-+0x04 (4byte)  未特定
-+0x08 (8byte)  座標系の値
-+0x10 (2byte)  マップID
-+0x18 (2byte)  向き
-+0x1b (1byte)  乗り物種別
+offset 0x00: fixed value (0x5302, meaning unresolved)
+offset 0x04: record count (89)
+offset 0x08: stride (0x20 = 32 bytes)
+offset 0x0c: duplicate record-count field
+offset 0x14: record array start
+```
+
+Each record (32 bytes):
+
+```
++0x04 (4 bytes)  unidentified
++0x08 (8 bytes)  coordinate-system value
++0x10 (2 bytes)  map ID
++0x18 (2 bytes)  facing
++0x1b (1 byte)   vehicle type
 ```
 
 ## PartyStatus
 
-- ヘッダ（16byte、ファイルオフセット`0x500`）: `PRTY`+version+size+予約
-- 本体（ファイルオフセット`0x510`起点）に、隊列編成（u32×6の配列、生存
-  キャラIDを格納。空き枠は0）・所持金・バンク残高・カジノコイン・アイテム袋
-  （アイテムID配列+個数配列）が含まれる。
-- 隊列配列は「先頭から詰めて格納し、空き枠は末尾に0を並べる」形式で、
-  実際の正規セーブファイルでも6枠全部が埋まった状態は観測されていない
-  （＝全滅した隊列スロットがない状態は仕様上あり得ないとみられる）。
+- Header (16 bytes, file offset `0x500`): `PRTY` + version + size + reserved
+- The body (starting at file offset `0x510`) contains the party formation
+  (an array of u32×6 holding living character IDs; empty slots are 0), gold,
+  bank balance, casino coins, and the item bag (item ID array + count
+  array).
+- The formation array is "packed from the front, with empty slots as 0 at
+  the tail"; even in actual legitimate save files, a state where all 6 slots
+  are filled has not been observed (i.e. having no wiped-out formation slot
+  appears to be impossible by design).
 
-## StoryStatus（章番号）
+## StoryStatus (chapter number)
 
-- ヘッダ（16byte、ファイルオフセット`0x3190`）: `STRY`+version 0x20000+size
-  176+予約
-- ヘッダ直後+0x14の位置に、現在の章番号を1byteで保持する。
-- `StoryStatus::setChapter(chapter)`は、章番号を更新するほか、`chapter==9`
-  （エンディング後と見られる特殊値）への遷移時のみ、直前の章番号を
-  ヘッダ+0x15（`prevChapter`相当）に退避し、別のグローバルフラグも
-  同時に立てる。
+- Header (16 bytes, file offset `0x3190`): `STRY` + version 0x20000 + size
+  176 + reserved
+- Right after the header, at +0x14, holds the current chapter number as 1
+  byte.
+- `StoryStatus::setChapter(chapter)` updates the chapter number, and only
+  when transitioning to `chapter==9` (a special value believed to be
+  post-ending) also saves the previous chapter number to header+0x15
+  (equivalent to `prevChapter`) and simultaneously sets another global flag.
 
-## BattleResult（モンスター図鑑・戦績データ）
+## BattleResult (monster book / battle record data)
 
-- ヘッダ（16byte、ファイルオフセット`0x1830`）: `FLAG`+version+size
-  `0x1960`(6496)+予約（`GameFlag`とマジックを共有するが別インスタンス・
-  別クラス）
-- モンスターごとの遭遇数・獲得ゴールド・獲得経験値・アイテム取得状況・
-  討伐済み(「スタンプ」)判定などを保持する、モンスター図鑑・戦績専用の
-  データブロック。街のNPC表示や物語進行フラグとは無関係。
+- Header (16 bytes, file offset `0x1830`): `FLAG` + version + size `0x1960`
+  (6496) + reserved (shares its magic with `GameFlag` but is a separate
+  instance / separate class)
+- A data block dedicated to the monster book and battle records, holding
+  per-monster encounter counts, gold earned, experience earned, item
+  acquisition status, kill ("stamp") flags, etc. Unrelated to town NPC
+  visibility or story-progress flags.
 
-## チェックサム
+## Checksum
 
-セーブファイル先頭4byteに格納された符号付き整数は、ファイルオフセット
-`0x10`以降、ファイル末尾までの全バイトを符号付きバイト単位で加算した
-合計値と一致している必要がある。
+The signed integer stored in the first 4 bytes of the save file must match
+the sum obtained by adding, as signed bytes, every byte from file offset
+`0x10` through the end of the file.
 
 ```
 sum = signed_byte_sum(buf[0x10:])
 ok  = (stored_checksum == sum)
 ```
 
-## ロード時の検証ロジック（`SaveData::deserialize`）
+## Load-time validation logic (`SaveData::deserialize`)
 
-セーブ読み込み時、以下のいずれかの条件に該当すると「壊れている」と
-判定されてロードが拒否される:
+When loading a save, meeting any of the following conditions causes it to
+be judged "corrupted" and the load to be rejected:
 
-| 戻り値 | 原因 |
+| Return value | Cause |
 |---|---|
-| 1 | ファイルが開けない |
-| 2 | 読み込めたバイト数がファイルサイズと不一致 |
-| 4 | ファイルサイズが0 |
-| 5 | 全体チェックサム不一致 |
-| 6 | いずれかのサブオブジェクトの`deserialize()`がエラーを返した |
-| 0 | 成功 |
+| 1 | file could not be opened |
+| 2 | number of bytes read does not match the file size |
+| 4 | file size is 0 |
+| 5 | overall checksum mismatch |
+| 6 | one of the sub-objects' `deserialize()` returned an error |
+| 0 | success |
 
-戻り値6の主要因の一つが、`PlayerDataContainer`のヘッダ照合である:
+One of the main causes of return value 6 is header validation of
+`PlayerDataContainer`:
 
 ```
-magicが"FLAG"と一致しない        -> エラー1
-versionが0x10000系でない         -> エラー2
-sizeが現在の.codeのgetSerializeSize()と不一致 -> エラー3
+magic does not match "FLAG"              -> error 1
+version is not in the 0x10000 family     -> error 2
+size does not match the current .code's getSerializeSize() -> error 3
 ```
 
-すなわち、セーブファイル内の`PlayerDataContainer`のsizeフィールドは、
-読み込み側の`.code`が「何人分のキャラクタースロットを持つビルドか」
-（6人用=`0xB98`、7人化パッチ適用済み=`0xD84`）と厳密に一致している
-必要がある。`GameFlag`自身のヘッダには、同種のmagic/version/size照合は
-実装されていない。
+In other words, the `PlayerDataContainer` size field inside a save file must
+match exactly "how many character slots the loading `.code` build has" (6
+members = `0xB98`, with the 7-member patch applied = `0xD84`). `GameFlag`'s
+own header has no equivalent magic/version/size validation implemented.
 
-## 関連ファイル（`webapp/`での実装参照）
+## Related file (implementation reference in `webapp/`)
 
-- `webapp/save_editor.py` の `compute_checksum()`（`CHECKSUM_START=0x10`）
+- `compute_checksum()` in `webapp/save_editor.py` (`CHECKSUM_START=0x10`)

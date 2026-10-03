@@ -1,24 +1,26 @@
-# プレイ時間フィールド
+# Play Time Field
 
-セーブファイルのオフセット`0x3250`に、プレイ時間を表すu32（4byte、
-リトルエンディアン）フィールドが存在する。
+At save file offset `0x3250` there is a u32 (4 bytes, little-endian) field
+representing play time.
 
-## フォーマット
+## Format
 
-- 単位は30fpsのフレームカウント。
-- 換算式: `hours = raw / 30 / 3600`, `minutes = raw / 30 / 60 % 60`。
-- 上限値は`0x66FEBF8`(107,998,200フレーム ≈ 999.98時間)で、`GameStatus::
-  addPlayTime`（ARMコード側、1加算処理）内でこの値にクランプされる。下限は0。
+- The unit is a frame count at 30fps.
+- Conversion formula: `hours = raw / 30 / 3600`, `minutes = raw / 30 / 60 % 60`.
+- The upper bound is `0x66FEBF8` (107,998,200 frames ≈ 999.98 hours), and it
+  is clamped to this value inside `GameStatus::addPlayTime` (the ARM-code
+  side, single-increment routine). The lower bound is 0.
 
-## ランタイム側の対応関係
+## Runtime-side correspondence
 
-ランタイム上は`GameStatus`オブジェクトの`+0x18`フィールドがこのカウンタを
-保持する。`GameStatus::serialize`/`deserialize`がこの値をセーブ内の
-`0x3250`へどう対応付けているかの詳細（他フィールドとの並び順、デバイス種別
-による`+0x10`シフトの意味）は未確定で、実データ比較による検証のみ行った。
+At runtime, the `+0x18` field of the `GameStatus` object holds this counter.
+The details of how `GameStatus::serialize`/`deserialize` map this value to
+`0x3250` in the save (ordering relative to other fields, the meaning of the
+`+0x10` shift by device type) are unconfirmed; only verification via actual
+data comparison has been done.
 
-## 検証方法
+## Verification method
 
-複数のセーブファイル間で`0x3250`をu32として読み出し、30fpsで時:分に換算した
-値が、各セーブの実際のプレイ時間と一致することを確認する形で、このオフセット
-がプレイ時間フィールドであることを裏付けた。
+This offset was confirmed to be the play-time field by reading `0x3250` as
+a u32 across multiple save files, converting it to hours:minutes at 30fps,
+and checking that the converted value matches each save's actual play time.

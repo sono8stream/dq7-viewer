@@ -1,41 +1,44 @@
-# 章番号とイベントフラグの更新構造
+# The structure for updating the chapter number and event flags
 
-## `GameParameter::setFlagShopParty` の処理内容
+## What `GameParameter::setFlagShopParty` does
 
-`StoryStatus`の章番号と、`day_index`型のtype0イベントフラグ一括セットは、
-単一の関数`GameParameter::setFlagShopParty(int recordIndex)`の中で、同じ
-テーブルの同じレコードから連続して行われる。
+The chapter number in `StoryStatus` and the bulk-set of type-0 event flags
+of the `day_index` kind are both performed, in sequence, from the same
+record of the same table, inside a single function
+`GameParameter::setFlagShopParty(int recordIndex)`.
 
 ```c
-// GameParameter::setFlagShopParty(int recordIndex) の該当部分（擬似コード）
+// The relevant part of GameParameter::setFlagShopParty(int recordIndex) (pseudocode)
 Record* rec = ExcelBinaryData::getRecordDynamic(&g_table, recordIndex, ...);
-u8 chapterNibble = rec->byte[0xa1] & 0x0f;            // レコード内の章情報
-StoryStatus::setChapter(storyStatusInstance, chapterNibble + 1); // 章番号を更新
-some_other_prep(recordIndex);                          // 未解析の前処理
-GameParameter::setEventFlag(recordIndex);              // 同じrecordIndexをdayIndexとして
-                                                        // type0フラグを一括セット
+u8 chapterNibble = rec->byte[0xa1] & 0x0f;            // chapter info inside the record
+StoryStatus::setChapter(storyStatusInstance, chapterNibble + 1); // update the chapter number
+some_other_prep(recordIndex);                          // unanalyzed preprocessing
+GameParameter::setEventFlag(recordIndex);              // bulk-sets type-0 flags using
+                                                        // the same recordIndex as the dayIndex
 ```
 
-- `GameParameter::setEventFlag`は内部で`GameFlag::initialize`（vtable[5]）を
-  呼び、type0/type1/type2のフラグ領域を**一旦全てゼロクリア**してから、
-  `recordIndex`行の1レコード分のみを`GameFlag::set(type=0, ...)`で
-  再セットする。「1行だけ反映」ではなく「毎回ゼロから作り直す」処理である。
-- `GameParameter::setFlagShopParty`は全ROM中で参照箇所が1箇所のみ。
-  呼び出し元は`GameParameter::execFlagShop`と`CheckPart::initialize`の
-  2箇所。
+- `GameParameter::setEventFlag` internally calls `GameFlag::initialize`
+  (vtable[5]), which **first zero-clears** the type-0/type-1/type-2 flag
+  regions entirely, then re-sets only the one record's worth of data for
+  row `recordIndex` via `GameFlag::set(type=0, ...)`. This is "rebuild from
+  zero every time," not "apply just one row."
+- `GameParameter::setFlagShopParty` is referenced from only a single
+  location in the entire ROM. Its callers are `GameParameter::execFlagShop`
+  and `CheckPart::initialize`.
 
-## 設計上の帰結
+## Design consequence
 
-章番号と`day_index`型のtype0イベントフラグは、常に同一の`recordIndex`から
-セットで更新される設計になっている。そのため「`day_index`側だけ進んでいて
-章番号だけ古い」という状態は、正規のコードパス上では発生し得ない組み合わせ
-である。
+The chapter number and the type-0 `day_index`-style event flags are always
+updated as a set, from the same `recordIndex`. Consequently, a state where
+"the `day_index` side has advanced but the chapter number is still old"
+cannot occur via the regular code path.
 
-## `StoryStatus`への参照箇所（章番号を読む側）
+## References to `StoryStatus` (the code that reads the chapter number)
 
-`StoryStatus`インスタンスへの参照は、確認できた範囲では以下のようなUI/
-メニュー系のゲート判定に限られ、マップ/NPC表示系のクラス（`ScriptGroup`・
-`ObjectAccess`・`TownSystem`等）からの参照は確認されなかった。
+References to the `StoryStatus` instance, within what could be confirmed,
+are limited to UI/menu-related gating checks such as those below; no
+references were found from map/NPC-display classes (`ScriptGroup`,
+`ObjectAccess`, `TownSystem`, etc.).
 
 ```
 BattleExecItem03::setup, BattleExecStealItem01::setup, PartUtility::startTitle,
@@ -48,20 +51,24 @@ endContestMessage7, ContestRankingMenu::onDraw, HaveAction::isType,
 GameParameter::setFlagShopParty
 ```
 
-## ScriptGroupヘッダ構造（章別グループの有無）
+## `ScriptGroup` header structure (whether per-chapter groups exist)
 
-SCRIPTファイル内の`ScriptGroup`は複数存在しうるが、ヘッダの`tag`フィールドは
-全グループで共通して固定文字列`"scriptgroup"`であり、章やバリエーションを
-示す識別子は含まれていない。グループ間の違いは`obj_count`/`header_size`等の
-サイズ差のみで観測され、同一NPC群が複数グループに分けて配置されるのは、
-章別の切り替えではなく天候/時間帯等のバリエーション単位である可能性が高い
-（未確定）。
+Multiple `ScriptGroup`s can exist within a SCRIPT file, but the header's
+`tag` field is the fixed string `"scriptgroup"` common to all groups, and
+contains no identifier indicating chapter or variant. Differences between
+groups are observed only as size differences such as `obj_count`/
+`header_size`; it is likely (unconfirmed) that the same group of NPCs being
+split across multiple groups is a unit of weather/time-of-day variation
+rather than a chapter-based switch.
 
-## 未確定のまま残る点
+## Points that remain unconfirmed
 
-- `recordIndex`がゲームプレイ中にどう決定されるかの具体的なトリガー条件。
-- 章・フラグ更新の間に呼ばれる前処理関数の中身。
-- 参照先テーブルの構造・レコード数・各フィールド（offset+0x6,0x8,0xa,0xc,0xe
-  はメッセージID群と見られるが未確認）。
-- このテーブルと、イベントフラグ定義データ内のday_indexテーブルが同一の
-  インデックス空間を指すかどうか。
+- The specific trigger condition by which `recordIndex` is determined
+  during gameplay.
+- The contents of the preprocessing function called between the chapter and
+  flag updates.
+- The structure/record count of the referenced table, and the meaning of
+  each field (offsets +0x6, +0x8, +0xa, +0xc, +0xe appear to be a group of
+  message IDs, but this is unconfirmed).
+- Whether this table and the day_index table inside the event-flag
+  definition data point into the same index space.

@@ -1,95 +1,107 @@
-# `CANM`（骨格アニメーション）フォーマット
+# `CANM` (Skeletal Animation) Format
 
-`CHARACTER/*.pack.lz`（LZ11圧縮CGFXパック）内の`SkeletalAnims`辞書に格納される、
-magic `CANM`の骨格アニメーションクリップのバイナリ構造。
+The binary structure of skeletal animation clips with magic `CANM`, stored
+in the `SkeletalAnims` dictionary inside `CHARACTER/*.pack.lz` (an
+LZ11-compressed CGFX pack).
 
-## トップレベル構造
+## Top-level structure
 
-`SkeletalAnims`辞書の各エントリが指す先:
+What each entry in the `SkeletalAnims` dict points to:
 
 ```
 +0x00  4CC "CANM"
 +0x04  u32 revision (0x07000001)
-+0x08  i32 self-rel ref -> クリップ名文字列（dictキーと一致）
-+0x0c  i32 self-rel ref -> 型名文字列 ("SkeletalAnimation" 固定)
++0x08  i32 self-rel ref -> clip name string (matches the dict key)
++0x0c  i32 self-rel ref -> type name string (fixed to "SkeletalAnimation")
 +0x10  u32 = 1
-+0x14  float  総フレーム数
++0x14  float  total frame count
 +0x18  u32 = 24
 +0x1c  u32 = 12
-+0x20  u32 = 0 (予約)
-+0x24  u32 = 0 (予約)
-+0x28  'DICT' ヘッダ（既存のDICTパーサでそのまま読める）
-       → キー=ボーン名。スケルトンの実ボーン名と一致する
++0x20  u32 = 0 (reserved)
++0x24  u32 = 0 (reserved)
++0x28  'DICT' header (readable directly with the existing DICT parser)
+       → key = bone name. Matches the skeleton's actual bone names
 ```
 
-## ボーンエントリの2方式
+## Two bone entry formats
 
-ボーンentry(`bo`)の`+0x08`にある`GfxPrimitiveType`値で、格納方式が2種類に分かれる:
+The storage format of a bone entry (`bo`) splits into two kinds based on
+the `GfxPrimitiveType` value at `+0x08`:
 
-### `PrimitiveType==8`（`GfxAnimQuatTransform`、生サンプル配列）
+### `PrimitiveType==8` (`GfxAnimQuatTransform`, raw sample array)
 
 ```
 +0x00  u32 flags
-+0x04  i32 self-rel ref -> ボーン名文字列
++0x04  i32 self-rel ref -> bone name string
 +0x08  u32 = 8
 +0x0c  u32 = 12
-+0x10  i32 self-rel ref -> サンプル列本体
++0x10  i32 self-rel ref -> sample array body
 ```
 
-サンプル列本体:
+Sample array body:
 
 ```
-+0x00  0 (パディング)
-+0x04  float  フレーム数
++0x00  0 (padding)
++0x04  float  frame count
 +0x08  0
 +0x0c  0
-+0x10〜 20byte刻みで繰り返し:
-  [0(pad), qx(float), qy(float), qz(float), qw(float)]  -- クォータニオン、毎フレームの生サンプル
++0x10~ repeats every 20 bytes:
+  [0(pad), qx(float), qy(float), qz(float), qw(float)]  -- quaternion, raw sample per frame
 ```
 
-サンプル数は `round(frameCount) + 1`（末尾にループ用の閉じフレームを含む）。
-移動(Translation)チャンネルの場合は16byte/frame（`[x,y,z,pad]`、クォータニオンの
-ノルム判定で回転と区別する）。
+The sample count is `round(frameCount) + 1` (includes a closing frame at
+the end for looping). For a Translation channel, it's 16 bytes/frame
+(`[x,y,z,pad]`; distinguished from rotation by checking the quaternion
+norm).
 
-`IsConstant`ビットが立っている場合はクリップ全体で1サンプルのみが格納され、
-再生時はその1個を全フレームに複製する。
+If the `IsConstant` bit is set, only a single sample is stored for the
+entire clip, and that one value is duplicated across all frames during
+playback.
 
-### `PrimitiveType==5`（`GfxAnimTransform`、Euler+Hermite圧縮カーブ）
+### `PrimitiveType==5` (`GfxAnimTransform`, Euler + Hermite compressed curve)
 
-Scale/Rotation/TranslationをX/Y/Z各軸ごとに独立した圧縮曲線（Hermite/StepLinear量子化
-キーフレーム、疎なキーで補間）として持つ、生サンプル配列とは別のレイアウト。
+A different layout from the raw sample array: Scale/Rotation/Translation
+are each held as independent compressed curves (Hermite/StepLinear
+quantized keyframes, interpolated from sparse keys) per X/Y/Z axis.
 
 ```
-ボーンentry Flagsワード: Scale/Rotation/Translation各軸の
-  Constant/Inexistentビットを保持（ビット配置は参考実装のGfxAnimTransformFlagsに準拠）
+Bone entry Flags word: holds Constant/Inexistent bits for each of the
+  Scale/Rotation/Translation axes (bit layout follows the reference
+  implementation's GfxAnimTransformFlags)
 
-各チャンネル: ヘッダ -> CurveFlags -> キー配列への自己相対ポインタ、の2段階参照
-  （GfxFloatKeyFrameGroup形式）
+Each channel: a 2-stage reference, header -> CurveFlags -> self-relative
+  pointer to the key array (GfxFloatKeyFrameGroup format)
 ```
 
-量子化形式は8種類（`Hermite128/64/48`, `UnifiedHermite96/48/32`, `StepLinear64/32`）。
-実データで確認されているのは`Hermite128`。
+There are 8 quantization formats (`Hermite128/64/48`,
+`UnifiedHermite96/48/32`, `StepLinear64/32`). Only `Hermite128` has been
+confirmed in actual data.
 
-ボーンFlagsワードの`IsXConstant`ビットと、実際のチャンネルヘッダの`IsConstant`値は
-食い違う場合がある。定数かどうかの判定はチャンネル毎のヘッダを優先し、ボーンFlags
-ワードは「チャンネルが存在するか（Inexistent）」の判定にのみ用いる。
+The `IsXConstant` bit in the bone Flags word and the actual `IsConstant`
+value in the channel header can disagree. When determining whether a
+channel is constant, prioritize the per-channel header; use the bone
+Flags word only to determine whether the channel exists (Inexistent).
 
-Euler→クォータニオンの合成式は一般的なXYZ/ZYX規約とは異なる独自の合成式を使う
-（軸ごとの値を評価した後、ゲーム固有の順序で合成する）。
+The Euler→quaternion composition formula uses a composition order that
+differs from the common XYZ/ZYX conventions — it's unique to this game
+(evaluate the per-axis values, then compose them in the game's own order).
 
-## スケールトラックと移動トラックの判別
+## Distinguishing scale tracks from translation tracks
 
-16byte/frameのサンプル列は、値が3軸とも1.0から±0.3以内に収まっている場合は
-スケールトラック（恒等変形に近い定数）、そうでない場合は移動トラックと判定する。
-バイト形状だけでは区別できず、値域からの判定が必要。
+For the 16 bytes/frame sample array, if all 3 axis values fall within
+±0.3 of 1.0, it is judged to be a scale track (close to a constant
+identity transform); otherwise it's judged a translation track. This
+cannot be distinguished from byte shape alone — it requires judging from
+the value range.
 
-## 最終ボーンの範囲
+## Range of the final bone
 
-クリップ内最後のボーンのデータ範囲は、次のボーンのオフセットが無い場合
-ファイル長でクランプする必要がある（固定長で決め打ちすると、小さいファイルで
-範囲外読み取りが発生する）。
+For the last bone in a clip, since there is no offset for a "next bone,"
+its data range must be clamped to the file length (hard-coding a fixed
+length causes out-of-bounds reads for small files).
 
-## スムーズスキニングの扱い
+## Handling of smooth skinning
 
-1頂点が複数ボーンの影響を受ける「スムーズスキニング」の形状は、各頂点が単一の
-ボーンに紐づく剛体スキニングとは別のサブメッシュ種別として格納される。
+A "smooth skinning" shape, where a single vertex is influenced by multiple
+bones, is stored as a separate submesh kind from rigid skinning, where
+each vertex is tied to a single bone.

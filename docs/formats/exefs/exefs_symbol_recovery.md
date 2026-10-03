@@ -1,47 +1,52 @@
-# ExeFS `.code` の関数シンボル情報（2系統）
+# ExeFS `.code` function symbol information (two systems)
 
-`.code`本体はシンボル完全ストリップ（マングル名・RTTI・ソースパス・assert文字列・
-エクスポートテーブルすべて無し）だが、内部エンジンがクラス名タグを2系統埋め込んでいる。
+The `.code` binary itself is fully stripped of symbols (no mangled names,
+RTTI, source paths, assert strings, or export table), but the internal
+engine embeds class-name tags through two separate systems.
 
-## 1. プロファイラ用の名前タグ文字列
+## 1. Profiler name-tag strings
 
-`void menu::town::TownItemMenu::onOpen()`のような完全修飾名の文字列が、
-216件程度まとまった領域に存在する。各文字列は対応するコンストラクタ/
-メソッド冒頭のリテラルプールからポインタ参照される典型パターン:
+Fully-qualified name strings such as `void menu::town::TownItemMenu::onOpen()`
+exist in a block of roughly 216 entries. Each string is referenced by
+pointer from the literal pool at the start of the corresponding
+constructor/method, in a typical pattern:
 
 ```arm
 mov  r1, 0
 str  r1, [r0, 0xa08]
 strb r1, [r0, 0xa0d]
 ldr  r1, [pc, ...]   ; = "menu::battle::BattleCommandMenu::BattleCommandMenu()"
-ldr  r2, [pc, ...]   ; = vtableポインタ
-str  r1, [r0, 0xa00] ; this+0xa00 = プロファイラ名ポインタ
+ldr  r2, [pc, ...]   ; = vtable pointer
+str  r1, [r0, 0xa00] ; this+0xa00 = profiler name pointer
 str  r2, [r0]        ; this+0 = vtable
 bx   lr
 ```
 
-このタグが付くのは`menu::`系UIクラス（および内部デバッグメニュー）のみで、
-フィールド/戦闘ロジック本体のクラスにはタグが無い。
+This tag is attached only to `menu::`-family UI classes (and the internal
+debug menu); classes for the field/battle logic itself carry no tag.
 
-## 2. クラス登録テーブル
+## 2. Class registration table
 
-16byteエントリが連続する固定テーブル（96件程度、うち過半数はvtable付き）:
+A fixed table of consecutive 16-byte entries (roughly 96 entries, the
+majority of which have a vtable):
 
 ```
-+0x00  char*  name    （完全修飾クラス名+コンストラクタ名の文字列）
-+0x04  void*  ctor    （コンストラクタ本体へのポインタ）
-+0x08  u32    不明    （コード領域外を指す値。別セグメントRVAまたはIDの可能性、未解明）
-+0x0c  void*  vtable  （vtable本体へのポインタ）
++0x00  char*  name    (fully-qualified class name + constructor name string)
++0x04  void*  ctor    (pointer to the constructor body)
++0x08  u32    unknown (a value pointing outside the code region; possibly an RVA
+                        in a different segment, or an ID — undeciphered)
++0x0c  void*  vtable  (pointer to the vtable body)
 ```
 
-name→ctor→vtableが確定的に対応するため、vtableから全virtualメソッドを
-`<class>::vf<n>`としてラベル付けできる。
+Because name→ctor→vtable correspond deterministically, every virtual method
+can be labeled `<class>::vf<n>` starting from the vtable.
 
-## 既知の限界
+## Known limitations
 
-- タグが存在するのは`menu::`系UIクラスのみ。フィールド/バトルロジック本体の
-  クラスは無名のまま
-- 登録テーブルの`+0x08`フィールドの意味は未解明
-- フィールド/バトルロジック本体のシンボルを特定するには、UI層のクラスを
-  起点に呼び出し元を辿る（例: メッセージウィンドウ生成関数の呼び出し元を
-  追ってイベントのトリガー処理に到達する、等）必要がある
+- The tag exists only for `menu::`-family UI classes; field/battle-logic
+  classes remain unnamed
+- The meaning of the registration table's `+0x08` field is undeciphered
+- To identify symbols for the field/battle logic itself, one must start
+  from a UI-layer class and trace callers (e.g. tracing the callers of a
+  message-window creation function back to the event trigger handling,
+  etc.)

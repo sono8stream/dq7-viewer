@@ -1,154 +1,185 @@
-# SCRIPTファイル（イベントスクリプト）フォーマット
+# SCRIPT File (Event Script) Format
 
-`RomFS/SCRIPT/*.bin`（NPCの会話・イベント処理を記述するバイトコード）の構造と、
-判明しているオペコードの一覧。
+The structure of `RomFS/SCRIPT/*.bin` (bytecode describing NPC dialogue and
+event processing), and the list of opcodes identified so far.
 
-## コンテナ階層とヘッダスキーマ
+## Container Hierarchy and Header Schema
 
-ファイルは次の4階層のコンテナが入れ子になった構造を持つ。
+A file has a structure of 4 nested container levels:
 
 ```
 script file
 └─ group[]
     └─ object[]
-        └─ procedure[initialize / execute / terminate / (メタデータブロック)]
+        └─ procedure[initialize / execute / terminate / (metadata block)]
 ```
 
-トップレベル・group・objectの3階層は共通のヘッダスキーマを持つ。
+The top level, group, and object levels share a common header schema.
 
 ```
-+0x00: tag (16 bytes, ASCII, 余りはゼロ埋め)
-+0x10: count (u32)         # 子要素の数
-+0x14: header_size (u32)   # この値 + rel_offset が子要素の絶対オフセット
-+0x18: ref_size (u32)      # 参照テーブルの実バイト数
-+0x20: ref table[count]    # (rel_offset: u32, size: u32) の配列、1エントリ8byte
++0x00: tag (16 bytes, ASCII, remainder zero-filled)
++0x10: count (u32)         # number of child elements
++0x14: header_size (u32)   # this value + rel_offset = the child element's absolute offset
++0x18: ref_size (u32)      # actual byte size of the reference table
++0x20: ref table[count]    # array of (rel_offset: u32, size: u32), 8 bytes per entry
 ```
 
-確定している不変条件（全ROMで例外なく成立。procedureヘッダの一部tag破損エントリ
-「BAD PROC TAG」を除く）:
+Confirmed invariants (hold without exception across the entire ROM, except
+for a few procedure-header entries with a corrupted tag, "BAD PROC TAG"):
 
-- `header_size == 0x20 + ref_size`（参照テーブルの終端と最初の子要素データの間に隙間がない）
-- ref-tableの参照テーブルは、しばしば`count`より多いスロット数（`ref_size`）を確保しており
-  （2の累乗単位のアロケータ痕跡と見られる）、未使用の余剰スロットは常に`(rel_offset=0, size=0)`。
-  パーサは参照テーブルを先頭から読み進め、`(0,0)`に出会った時点をリスト終端とみなす。
-- ref-tableのインデックス順と、子要素の物理バイト配置順は常に一致する（昇順）。
+- `header_size == 0x20 + ref_size` (no gap between the end of the reference
+  table and the first child element's data).
+- The ref-table often reserves more slots (`ref_size`) than `count` (likely
+  a trace of a power-of-2-unit allocator); unused surplus slots are always
+  `(rel_offset=0, size=0)`. A parser reads the reference table from the
+  start and treats hitting `(0,0)` as the end of the list.
+- The ref-table's index order always matches the physical byte layout order
+  of the child elements (ascending).
 
-procedure自体のref table（1 object内に4スロット: 無名メタデータ/initialize/execute/terminate）は
-`block_count=3`だが`block_ref_size=32`（4スロット分）を常に確保しており、4番目の未使用スロットは
-常に`(0,0)`。
+The procedure's own ref table (4 slots within one object: anonymous
+metadata/initialize/execute/terminate) has `block_count=3`, but always
+reserves `block_ref_size=32` (worth of 4 slots), with the 4th, unused slot
+always `(0,0)`.
 
-## procedureの内部構造（block1/block2/block3）とアライメント規則
+## Internal Procedure Structure (block1/block2/block3) and Alignment Rules
 
-各procedure（initialize/execute/terminate）は内部に3つのブロックを持つ。
+Each procedure (initialize/execute/terminate) internally has 3 blocks.
 
 ```
-procedureヘッダ
-  +0x00〜: block1 (indent配列, 1コマンドにつき1byte=if/elseifネスト深さ)
-  block2 (累積オフセット配列, 4byte × (コマンド数+1))
-  block3 (コマンドの生バイト列)
+procedure header
+  +0x00~: block1 (indent array, 1 byte per command = if/elseif nesting depth)
+  block2 (cumulative offset array, 4 bytes × (command count + 1))
+  block3 (raw command byte stream)
 ```
 
-- `block1`のサイズ = 実コマンド数（1byte/コマンド）。
-- `block1`の**物理領域**は`round_up_16(block1実サイズ)`（16byte単位切り上げ）だけ確保される。
-- `block2`の`rel_offset`は必ず`round_up_16(block1実サイズ)`の位置から始まる。
-- `block3`の`rel_offset`は必ず`block2のrel_offset + round_up_16(block2実サイズ)`の位置から始まる。
-- procedure自身の宣言サイズは`round_up_16(block1の物理終端 + block2の物理終端 + block3実サイズ)`。
+- The size of `block1` = the actual command count (1 byte/command).
+- The **physical region** of `block1` reserves `round_up_16(block1 actual
+  size)` (rounded up to a 16-byte unit).
+- `block2`'s `rel_offset` always starts at the position
+  `round_up_16(block1 actual size)`.
+- `block3`'s `rel_offset` always starts at the position
+  `block2's rel_offset + round_up_16(block2 actual size)`.
+- The procedure's own declared size is
+  `round_up_16(block1's physical end + block2's physical end + block3 actual size)`.
 
-**編集時の安全規則（実機検証済み）**:
+**Safety rules for editing (verified on real hardware)**:
 
-1. コンテナ（group/object/procedureいずれも）自身の宣言sizeを、既存の子要素に属さない
-   パディング領域の追加によって増やすことは、階層を問わず常に安全。
-2. 危険なのは、procedureのblock1/block2/block3が実データの増減によってサイズ変化する場合のみ。
-   このとき上記のround_up_16規則を守らずに単純な線形シフトで計算すると、実機でフリーズする。
-   規則を守って計算すれば、任意のコマンドの挿入・削除が安全に行える。
-3. block1配列への挿入は、挿入箇所に対応する論理位置に値を差し込む必要がある（末尾への
-   追記ではない）。
-4. group/object/procedureいずれのref-tableでも、新規エントリは必ず既存エントリの直後
-   （リスト末尾、または`(0,0)`の空きスロット）に追加し、既存エントリの`rel_offset`/`size`
-   の値は変更しない。既存エントリの値を変更する操作（実データの増減に伴うサイズ変化）だけが
-   フリーズを引き起こす。
-5. ref-tableのインデックス順と物理配置順は常に一致させる必要がある（index順を入れ替えて
-   物理配置だけ末尾に置く、という実装は実機未検証の構造的差異を生むため避ける）。
+1. Increasing a container's (group/object/procedure, any of them) own
+   declared size by adding padding that doesn't belong to an existing child
+   element is always safe, regardless of hierarchy level.
+2. The dangerous case is only when a procedure's block1/block2/block3 change
+   size due to actual data growing/shrinking. If this is computed with a
+   naive linear shift instead of following the round_up_16 rules above, it
+   freezes on real hardware. If the rules are followed, inserting/deleting
+   any command can be done safely.
+3. Insertion into the block1 array must place the value at the logical
+   position corresponding to the insertion point (not appended at the end).
+4. For any of the group/object/procedure ref-tables, a new entry must always
+   be added immediately after existing entries (at the end of the list, or
+   into an empty `(0,0)` slot), and the `rel_offset`/`size` values of
+   existing entries must not be changed. It is only operations that change
+   the value of an existing entry (a size change from actual data
+   growing/shrinking) that cause the freeze.
+5. The ref-table's index order and physical layout order must always be
+   kept consistent (swapping index order while placing the physical layout
+   only at the end is an implementation that has not been verified on real
+   hardware and should be avoided, as it produces a structural difference).
 
-## objectのメタデータブロック（proc-ref tableの先頭、48byte）
+## Object Metadata Block (head of the proc-ref table, 48 bytes)
 
-scriptobjectのproc-ref table先頭にある「無名」エントリ（常に48byte）は、procedureではなく
-そのobject自身に紐づくメタデータブロックである。`int32[]`として解釈する:
+The "anonymous" entry (always 48 bytes) at the head of a scriptobject's
+proc-ref table is not a procedure, but a metadata block tied to the object
+itself. Interpreted as `int32[]`:
 
-| オフセット | 型 | 内容 |
+| Offset | Type | Contents |
 | --- | --- | --- |
-| 0 | u32 | 話者コントロールコード（`#NNNN`形式の話者ID）と一致する値 |
-| 4 | u32 | 用途不明の小さい連番値 |
-| 8,12,16 | f32×3 | 用途不明（座標の可能性があるが未検証、下記NPC配置ブロックとは別領域） |
+| 0 | u32 | a value matching the speaker control code (speaker ID in `#NNNN` form) |
+| 4 | u32 | small sequential value, purpose unknown |
+| 8,12,16 | f32×3 | purpose unknown (possibly coordinates, but unverified; a separate region from the NPC placement block below) |
 
-## NPC配置情報ブロック（objectヘッダ直後、48byte）
+## NPC Placement Info Block (right after the object header, 48 bytes)
 
-各scriptobjectのヘッダ直後には、固定サイズ・固定オフセットの48byte領域があり、ref-tableの
-挿入・削除ロジックの対象外（4byte単位で直接上書き可能）。
+Right after each scriptobject's header there is a fixed-size, fixed-offset
+48-byte region that is outside the scope of the ref-table's
+insertion/deletion logic (can be overwritten directly in 4-byte units).
 
-| オフセット | 型 | 内容 | 検証状態 |
+| Offset | Type | Contents | Verification status |
 | --- | --- | --- | --- |
-| 0 | u32 | 用途不明（連番値） | 未確定 |
-| 4 | u32 | NPCの表示モデル/アクターID | **確定**（書き換えると実機で表示モデルが変化） |
-| 8 | u32 | 用途不明（種別フラグまたは向き） | 未確定 |
-| 12 | f32 | マップ座標X | **確定**（実機で書き換えると表示位置が変化） |
-| 16 | f32 | マップ座標Y（高さ） | **確定** |
-| 20 | f32 | マップ座標Z | **確定** |
-| 24-44 | — | 常に0（未使用/予約領域） | — |
+| 0 | u32 | purpose unknown (sequential value) | unconfirmed |
+| 4 | u32 | the NPC's display model/actor ID | **confirmed** (rewriting it changes the displayed model on real hardware) |
+| 8 | u32 | purpose unknown (type flag or facing) | unconfirmed |
+| 12 | f32 | map coordinate X | **confirmed** (rewriting it on real hardware changes the display position) |
+| 16 | f32 | map coordinate Y (height) | **confirmed** |
+| 20 | f32 | map coordinate Z | **confirmed** |
+| 24-44 | — | always 0 (unused/reserved region) | — |
 
-座標が全て`(0,0,0)`のエントリ（物理的な配置を持たない、会話トリガー専用などと見られる
-特殊なobjectの可能性がある）は低確信度として扱う。
+Entries where the coordinates are all `(0,0,0)` (possibly special objects
+with no physical placement, such as ones dedicated to triggering dialogue)
+are treated as low confidence.
 
-## 確定済みオペコード一覧
+## Confirmed Opcode List
 
-| opcode | 名称 | パラメータ | 意味 | 状態 |
+| opcode | name | parameters | meaning | status |
 | --- | --- | --- | --- | --- |
-| `0x00000003` | `IF_FLAG` | `[type, flag_id, expected_value]` | フラグ分岐。typeは観測上0/1/2。typeが2の場合は非永続（起動毎にクリア）、0/1はセーブに永続化されると見られる | 確定 |
-| `0x0000000f` | `IF_TALKED_TO` | `[variant]` | 話しかけると真になる分岐条件。ほぼ全てのNPC`execute`プロシージャの先頭(#0)に置かれる定型パターン。variant=0が大半（1,2の意味は未確定） | 確定 |
-| `0x00000070` | `IF_KO_STATUS` | `[character_id, mode]` | 指定キャラの生死判定。mode=0で「生存しているとき」、mode=1で「戦闘不能のとき」に分岐 | 確定 |
-| `0x00010004` | `SET_FLAG`（分岐途中の汎用書込） | `[type, flag_id, value]` | フラグを書き込む。`IF_FLAG`と同じ(type,id)空間 | 確定 |
-| `0x00030004` | `SET_FLAG`（分岐終了マーカー） | `[type, flag_id, value]` | ほぼ必ずif/elseifブロックの最後尾で呼ばれ、値もほぼ常に1。「このイベント分岐を実行済み」という完了マーキングに使われる | 確定（統計的裏付け） |
-| `0x00010005` | `OBJECT_TOGGLE` | `[target_index]` | 同一group内の「(target_index+1)番目のobject」の表示on/offを切り替える。objectは`obj_count`に数えられているだけでは自動表示されず、このコマンドによる明示的な有効化が必要 | 確定（実機検証済み） |
-| `0x00010009`/`0x00030009`等 MSGファミリー（低byteが`0x07`/`0x09`/`0x0a`/`0x0b`/`0x0d`/`0x0e`） | メッセージ表示 | `[msgID, count, ...]` | opcodeの意味は直交する2軸: 低byteがコマンド種別（表示内容の形式差。例: `0x07`/`0x09`は同じ表示形式で「話者がプレイヤーの方を向くか(0x09)/向かないか(0x07)」の違い）、上位16bit(`0x0001`/`0x0003`)が実行頻度制御（`0x0001`=シーン内で1度きり、`0x0003`=話しかけるたびに毎回再生）。全ROM検証で、`repeats`(毎回)の99.5%は`IF_TALKED_TO`分岐の内側、`once`(1度きり)の100%近くが外側、という設計傾向を確認 | 確定（実機検証済み） |
-| `0x00010014` | `SET_POSITION` | `[0, x(f32), z(f32)]`程度（詳細未確定） | 対象を指定座標へ動的配置するコマンドと推測。NPC配置ブロックのx/y/z確定値と一致する座標を出力する実例あり | 準確定（ビット列の一致からの仮説、実機未検証） |
-| `0x00010022`/`0x00010023` | `ADD_PARTY_MEMBER`/`REMOVE_PARTY_MEMBER` | `[character_id, mode]` | mode=0で指定キャラをパーティ（隊列配列、6枠固定）に追加、mode≠0で削除。削除はネイティブ実装`PlayerParty::delMember`（6枠を線形探索して対象を0にし、後続の非0要素を前に詰めるコンパクション）を呼ぶ。人数0や特定キャラの除外といった安全装置はエンジン側に一切ない | 確定（追加・削除とも実機/実データ両方で裏付け済み） |
-| `0x00010025` | `CONFIRM_YESNO` | `[var_type, var_id, cancel_value]` | はい/いいえの確認プロンプトを表示し、結果をflag(var_type, var_id)に書く | 確定（全ROムで多数の使用実績） |
-| `0x0001001f` | `MAP_WARP` | `[floor_id, x(f32), y(f32), z(f32), facing, flag5]` | 指定フロアIDの座標へワープする。`floor_id`は`LEVELDATA/dq7_floor_list.dat`の対応テーブルで解決できる（下記「関連データファイル」参照）。facing(4方位と推測)とflag5(0/1)の意味は未確定 | 準確定（引数の意味はROM全体のスキャンで裏付け。実機でのワープ実行自体は未検証） |
-| `0x00010064` | `PARTY_SLOT_ACTIVATE`（仮称） | `[slot, value]` | 隊列スロット関連の操作と推測。単体では隊列の挙動に実機で有意な変化を与えないことを確認済み | 仮称（効果不確定） |
-| `0x00010093` | `PARTY_SLOT_QUERY`（仮称） | `[type, slot]` | 隊列スロットの状態照会（読み取り/分岐用）と推測。1回の処理内で複数回参照されるパターンが多く、一度きりの書き込みではなく読み取り系と見られる | 仮称（効果不確定） |
-| `0x00010096` | `JOIN_BANNER`（別称`FANFARE_MSG`） | `[msgID, count, style]` | 「〇〇が仲間になった」等のジングル付きメッセージバナー表示 | 確定 |
-| `0x000100c5` | `CHOICE_MENU`（`CmdOpenPartyChangeMenu`） | `[msgID, p1, flag_slot2..flag_slot6]` | 隊列変更用の複数択メニュー。候補の構築(onOpen)は現在のパーティを動的に走査するが、選択結果の解決(onResult)は特定の4キャラID決め打ちの実装であり、任意キャラクターには対応しない。詳細は別ドキュメント参照 | 確定 |
+| `0x00000003` | `IF_FLAG` | `[type, flag_id, expected_value]` | flag branch. `type` observed to be 0/1/2. When type is 2 it is non-persistent (cleared on every boot); 0/1 appear to be persisted to the save | confirmed |
+| `0x0000000f` | `IF_TALKED_TO` | `[variant]` | branch condition that becomes true when talked to. A standard pattern placed at the start (#0) of almost every NPC's `execute` procedure. variant=0 in the vast majority of cases (meaning of 1,2 unconfirmed) | confirmed |
+| `0x00000070` | `IF_KO_STATUS` | `[character_id, mode]` | checks whether the given character is alive/dead. mode=0 branches on "when alive", mode=1 on "when incapacitated" | confirmed |
+| `0x00010004` | `SET_FLAG` (generic write mid-branch) | `[type, flag_id, value]` | writes a flag. Same (type, id) space as `IF_FLAG` | confirmed |
+| `0x00030004` | `SET_FLAG` (branch-end marker) | `[type, flag_id, value]` | almost always called at the very end of an if/elseif block, with the value almost always 1. Used as a "this event branch has been executed" completion marker | confirmed (statistically supported) |
+| `0x00010005` | `OBJECT_TOGGLE` | `[target_index]` | toggles the display on/off of "the (target_index+1)-th object" within the same group. An object merely being counted in `obj_count` does not make it display automatically; explicit activation via this command is required | confirmed (verified on real hardware) |
+| `0x00010009`/`0x00030009` etc., the MSG family (low byte is `0x07`/`0x09`/`0x0a`/`0x0b`/`0x0d`/`0x0e`) | message display | `[msgID, count, ...]` | the opcode's meaning runs along two orthogonal axes: the low byte is the command subtype (a difference in display form; e.g. `0x07`/`0x09` share the same display form but differ in "whether the speaker faces the player (0x09) or not (0x07)"), and the upper 16 bits (`0x0001`/`0x0003`) control execution frequency (`0x0001` = once per scene, `0x0003` = replayed every time you talk). Across a full-ROM check, 99.5% of `repeats` (every time) instances are inside an `IF_TALKED_TO` branch, and nearly 100% of `once` instances are outside it — a confirmed design tendency | confirmed (verified on real hardware) |
+| `0x00010014` | `SET_POSITION` | roughly `[0, x(f32), z(f32)]` (details unconfirmed) | presumed to be a command that dynamically places a target at given coordinates. There are real examples where it outputs coordinates matching the confirmed x/y/z values of the NPC placement block | semi-confirmed (hypothesis from matching bit patterns, not verified on real hardware) |
+| `0x00010022`/`0x00010023` | `ADD_PARTY_MEMBER`/`REMOVE_PARTY_MEMBER` | `[character_id, mode]` | mode=0 adds the given character to the party (formation array, fixed at 6 slots), mode≠0 removes them. Removal calls the native implementation `PlayerParty::delMember` (linearly scans the 6 slots, zeroes the target, and compacts by shifting subsequent nonzero elements forward). The engine has absolutely no safeguard such as a zero-member check or exclusion of specific characters | confirmed (both addition and removal backed by both real-hardware and real-data evidence) |
+| `0x00010025` | `CONFIRM_YESNO` | `[var_type, var_id, cancel_value]` | shows a yes/no confirmation prompt and writes the result into flag(var_type, var_id) | confirmed (extensive usage across the full ROM) |
+| `0x0001001f` | `MAP_WARP` | `[floor_id, x(f32), y(f32), z(f32), facing, flag5]` | warps to the coordinates of the given floor ID. `floor_id` can be resolved via the correspondence table in `LEVELDATA/dq7_floor_list.dat` (see "Related Data Files" below). The meaning of facing (presumed to be one of 4 directions) and flag5 (0/1) is unconfirmed | semi-confirmed (the meaning of the arguments is supported by a full-ROM scan; actually executing the warp on real hardware is unverified) |
+| `0x00010064` | `PARTY_SLOT_ACTIVATE` (tentative name) | `[slot, value]` | presumed to be an operation related to a formation slot. Confirmed that it alone does not cause any significant visible change in formation behavior on real hardware | tentative name (effect unconfirmed) |
+| `0x00010093` | `PARTY_SLOT_QUERY` (tentative name) | `[type, slot]` | presumed to be a formation-slot state query (for reading/branching). Often referenced multiple times within a single process, suggesting it's a read operation rather than a one-time write | tentative name (effect unconfirmed) |
+| `0x00010096` | `JOIN_BANNER` (also called `FANFARE_MSG`) | `[msgID, count, style]` | displays a jingle-accompanied message banner such as "X has joined the party" | confirmed |
+| `0x000100c5` | `CHOICE_MENU` (`CmdOpenPartyChangeMenu`) | `[msgID, p1, flag_slot2..flag_slot6]` | a multi-choice menu for changing the party formation. Building the candidate list (onOpen) dynamically scans the current party, but resolving the selection result (onResult) is an implementation hardcoded to 4 specific character IDs and does not support arbitrary characters. See a separate document for details | confirmed |
 
-## 関連データファイル
+## Related Data Files
 
-- `LEVELDATA/dq7_floor_list.dat`: フロアID⇔マップコードの対応テーブル。ヘッダ16byte
-  （count, rec_size等）、レコードは16byte固定、テーブルはオフセット`0x20`から開始。
-  - `+0x00` u32: 未使用（観測範囲では常に0）
-  - `+0x04` u16: フロアID（`MAP_WARP`のparam[0]と対応）
-  - `+0x06` u16: グループ番号（マップ系列ごとの通し番号）
-  - `+0x08` char[8]: マップコード名（NUL終端）
-  - フロアIDが5000番台のレコードは、いずれもワールドマップの分割タイル用。
-  - フロアIDは`MAP/_list.txt`の行番号とは一致しない。必ずこのテーブルの`+0x04`を介して解決する必要がある。
+- `LEVELDATA/dq7_floor_list.dat`: a floor-ID ⇔ map-code correspondence
+  table. 16-byte header (count, rec_size, etc.), fixed 16-byte records, the
+  table starts at offset `0x20`.
+  - `+0x00` u32: unused (always 0 in the observed range)
+  - `+0x04` u16: floor ID (corresponds to `MAP_WARP`'s param[0])
+  - `+0x06` u16: group number (a sequential number per map series)
+  - `+0x08` char[8]: map code name (NUL-terminated)
+  - Records with floor IDs in the 5000s are all for divided world-map
+    tiles.
+  - The floor ID does not match the line number in `MAP/_list.txt`. It must
+    always be resolved via this table's `+0x04`.
 
-## 汎用N択メニューコマンド（`CmdSelectMenu`/`CmdSelectMenu1`系）
+## Generic N-Choice Menu Commands (the `CmdSelectMenu`/`CmdSelectMenu1` family)
 
-実行コード側に、キャラクターの概念を一切持たない汎用の選択肢メニュー実装クラスが存在する。
+On the executable-code side, there exist generic choice-menu implementation
+classes that carry no notion of character at all.
 
-- `CmdSelectMenu`（4択）/`CmdSelectMenu1`（5択）: 選ばれたカーソル位置（0始まり）だけを見て、
-  対応するスクリプト側flag idをそのまま立てる。パラメータは`[..., flag0, flag1, ...]`の形で、
-  選択肢の数だけ末尾にflag idが並ぶ。
-- `CmdSelectMenu2`（6択）: カーソル位置ではなく、候補ごとに持つ「値」フィールドを閾値と比較して
-  分岐する、より複雑な実装。
-- 実例として確認できた唯一の使用例（opcode `0x000100e4`、全ROM中2件）では、選択肢ごとの
-  表示文言はメッセージテキストに個別に埋め込まれておらず、選択後の全分岐が同一の後続テキストに
-  合流し、違いは内部的な数値パラメータ（カメラ座標・ワープ先フロアID等）だけだった。つまり
-  この仕組みは「メッセージ本文に自由な文言を書けば、それがそのまま選択肢ラベルになる」という
-  設計ではない。
-- `CmdSelectMenu`/`CmdSelectMenu1`に対応する実際のopcode番号は未確定。
+- `CmdSelectMenu` (4 choices) / `CmdSelectMenu1` (5 choices): looks only at
+  the chosen cursor position (0-indexed) and sets the corresponding
+  script-side flag ID directly. The parameters take the form
+  `[..., flag0, flag1, ...]`, with as many flag IDs trailing as there are
+  choices.
+- `CmdSelectMenu2` (6 choices): a more complex implementation that branches
+  not on cursor position but by comparing each candidate's own "value"
+  field against a threshold.
+- In the only usage example that could be confirmed (opcode `0x000100e4`,
+  2 occurrences across the full ROM), the display text for each choice was
+  not individually embedded in the message text; all branches after the
+  choice converged on the same following text, and the only difference was
+  internal numeric parameters (camera coordinates, destination floor ID,
+  etc.). In other words, this mechanism is not designed so that "writing
+  free text in the message body makes it the choice label as-is."
+- The actual opcode number(s) corresponding to `CmdSelectMenu`/`CmdSelectMenu1`
+  are unconfirmed.
 
-## 死んだコード（実装が空）
+## Dead Code (empty implementations)
 
-- `CmdSetPartyQuitToAzuke`: initialize/execute/isEnd/デストラクタの4メソッド合計でも
-  20byte（`bx lr`で即returnのみ、isEndは無条件で1=完了を返すのみ）。前作（DQ4-6系列）由来の
-  クラス構成がそのまま残っているが、DQ7では処理本体が空に差し替えられている。
-- `CmdSpecialMenu`: initialize/isEndともに空実装。
+- `CmdSetPartyQuitToAzuke`: even combining all 4 methods — initialize/
+  execute/isEnd/destructor — totals 20 bytes (just an immediate `bx lr`
+  return; isEnd unconditionally returns 1 = complete). The class
+  composition carried over from the previous installment (the DQ4-6 series)
+  remains, but in DQ7 the processing body has been replaced with an empty
+  one.
+- `CmdSpecialMenu`: both initialize and isEnd are empty implementations.

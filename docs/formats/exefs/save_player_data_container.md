@@ -1,104 +1,107 @@
-# セーブデータ: `PlayerDataContainer`とNCCH/ExeFSコンテナ構造
+# Save data: `PlayerDataContainer` and the NCCH/ExeFS container structure
 
-## `PlayerDataContainer`（セーブ内キャラクター配列）
+## `PlayerDataContainer` (the character array in the save)
 
-`PlayerDataContainer::serialize`/`deserialize`（ExeFS `.code`内）が、
-インメモリの`PlayerData`配列（1レコード1064byte固定）のうち先頭から
-一定数だけをセーブへ書き出す/読み込む。
+`PlayerDataContainer::serialize`/`deserialize` (inside ExeFS `.code`) writes
+to/reads from the save file a fixed number of entries from the start of the
+in-memory `PlayerData` array (one record fixed at 1064 bytes).
 
 ```arm
 mov r4, 1
 loop:
-  ; r0 = base + r4*1064 + 8   (インメモリ構造体1レコード = 1064byte)
+  ; r0 = base + r4*1064 + 8   (one in-memory struct record = 1064 bytes)
   bl PlayerData::serialize
   add r4, r4, 1
-  cmp r4, 7        ; ループ継続条件。コード未改造時は r4=1..6 の6回
-  add r5, r5, 0x1ec  ; セーブ側の出力ポインタを1レコード分(0x1EC=492byte)進める
+  cmp r4, 7        ; loop continuation condition; unmodified code runs r4=1..6, i.e. 6 times
+  add r5, r5, 0x1ec  ; advance the save-side output pointer by one record (0x1EC = 492 bytes)
   blt loop
 ```
 
-- `getSerializeSize`はコンテナ全体のサイズを固定値として返す
-  （ヘッダ16byte + レコード数×0x1EC。6人分なら`0xB98`）
-- `PlayerDataContainer::initialize`は起動時に常に46人分
-  （`dq7_character_init_data.dat`のindex 1〜45相当）をインメモリ配列に
-  セットアップしている。**インメモリ配列自体には最低46人分の容量が
-  既にあり、セーブへの書き出し段階でのみ件数が絞られる**設計
+- `getSerializeSize` returns the total container size as a fixed value
+  (16-byte header + record count × 0x1EC; `0xB98` for 6 people)
+- `PlayerDataContainer::initialize` always sets up 46 people's worth
+  (corresponding to index 1-45 of `dq7_character_init_data.dat`) in the
+  in-memory array at startup. **The in-memory array already has capacity
+  for at least 46 people; the count is narrowed down only at the
+  save-writing stage.**
 
-### キャラクターレコードの自己記述ヘッダ（16byte、各レコード共通）
+### Character record self-describing header (16 bytes, common to every record)
 
-セーブ内の各キャラクターレコードは、先頭にコンテナヘッダと同形式の
-自己記述サブヘッダを持つ:
+Each character record in the save has a self-describing sub-header at its
+head, in the same format as the container header:
 
 ```
-+0x00  "DATA" (4byte magic)
++0x00  "DATA" (4-byte magic)
 +0x04  u32: 0x00010000 (version)
-+0x08  u32: 0x000001EC (=492、このレコード自身のサイズ)
-+0x0C  u32: 0（予約/パディング）
-+0x10  u8:  キャラクター番号（1-indexed連番、record0なら1）
-+0x11  u8:  既知レコードでは共通して5（意味未確定）
-+0x12  u16: 0固定
-+0x14  ここからキャラクター本体のフィールド（exp等）が始まる
++0x08  u32: 0x000001EC (=492, this record's own size)
++0x0C  u32: 0 (reserved/padding)
++0x10  u8:  character number (1-indexed sequence number; 1 for record 0)
++0x11  u8:  consistently 5 across known records (meaning unconfirmed)
++0x12  u16: fixed at 0
++0x14  the character's own fields (exp, etc.) begin here
 ```
 
-コンテナ全体（`PlayerDataContainer`）側にも同形式の"FLAG"マジック付き
-ヘッダがあり、同じ入れ子構造になっている（コンテナ全体を包むヘッダ＋
-各要素ごとの個別ヘッダ、という二重の自己記述構造）。
+The container as a whole (`PlayerDataContainer`) also has a header with the
+same "FLAG" magic format, forming the same kind of nested structure (a
+header wrapping the whole container, plus an individual header per
+element — a doubly self-describing structure).
 
-### `PlayerManager::addPlayer`内のフォーメーション座標配列
+### The formation coordinate array inside `PlayerManager::addPlayer`
 
-パーティの立ち位置（座標/回転）をシフトする処理が、現在人数を参照する
-ランタイム変数（`PlayerManagerオブジェクト+0x120`）に対して上限比較を
-行っている:
+The processing that shifts party standing positions (coordinates/rotation)
+performs an upper-bound comparison against a runtime variable referencing
+the current headcount (`PlayerManager object +0x120`).
 
 ```arm
-cmp r0, 6      ; r0 = 現在の隊列人数
-bge ...        ; 6以上ならこの座標シフト処理をスキップ
+cmp r0, 6      ; r0 = current party headcount
+bge ...        ; skip this coordinate-shift processing if 6 or more
 ...
-cmp r4, 6      ; 同ループの終了条件
+cmp r4, 6      ; the same loop's termination condition
 ```
 
-この配列は`PlayerDataContainer`のセーブ用配列とは別の、パーティ編成UI用の
-座標バッファ。実測では7人目を追加してもこの上限由来の不具合は確認されず、
-配列自体はセーブの件数制限より余裕を持って確保されている可能性が高い
-（詳細未確認）。
+This array is a separate coordinate buffer for the party-formation UI,
+distinct from `PlayerDataContainer`'s save array. In practice, adding a 7th
+member did not reveal any bug caused by this upper bound; the array itself
+likely has more headroom than the save's count limit (details unconfirmed).
 
-### `PlayerManager::setPartyControl`: プレイアブル/AI操作の判定
+### `PlayerManager::setPartyControl`: determining player-controllable vs. AI
 
-パーティメンバーごとに「プレイヤーが操作できるキャラ」か「AIが操作する
-お助けキャラ」かを行動ノード（ビヘイビアツリー、`fcn.0018fae4`でノード種別
-ごとに構築）として組み立てる処理。分岐は、キャラクターの種別を表す
-1byte値（ASCIIの`'w'`/`'e'`/`'f'`/`'x'`、`0x82`等）を使っており、この値は
-汎用テーブル引きヘルパー（`PlayerData::getJob()`と同一パターンの
-`result = *(array) + 0x14 + index * stride`関数）経由で取得される。
-参照元テーブルの実体（`dq7_player_job.dat`本体か、キャラ初期化データの
-別フィールドか）は未確定。
+Processing that builds, per party member, an action node (behavior tree,
+constructed per node type via `fcn.0018fae4`) representing whether the
+character is "player-controllable" or an "AI-controlled support character."
+The branch uses a 1-byte value representing the character's category
+(ASCII `'w'`/`'e'`/`'f'`/`'x'`, `0x82`, etc.), obtained via a generic
+table-lookup helper (the same pattern function as `PlayerData::getJob()`:
+`result = *(array) + 0x14 + index * stride`). Whether the referenced table
+is `dq7_player_job.dat` itself or a separate field in the character
+initialization data is unconfirmed.
 
-`dq7_player_job.dat`は55レコード×188byteの職業定義テーブル。
+`dq7_player_job.dat` is a job-definition table of 55 records × 188 bytes.
 
-## NCCH / ExeFSコンテナフォーマット（実データから検証済み）
+## NCCH / ExeFS container format (verified against real data)
 
-### NCCHヘッダ（マジック`NCCH`基準の相対オフセット）
+### NCCH header (offsets relative to the `NCCH` magic)
 
-- `+0xA0` ExeFS offset（media unit、×0x200）
-- `+0xA4` ExeFS size（media unit）
-- `+0xA8` ExeFS hash region size（media unit）
+- `+0xA0` ExeFS offset (media units, ×0x200)
+- `+0xA4` ExeFS size (media units)
+- `+0xA8` ExeFS hash region size (media units)
 - `+0xB0`/`+0xB4` RomFS offset/size
-- `+0xC0`〜`+0xE0` ExeFSスーパーブロックハッシュ（SHA256, 0x20byte）
-- `+0xE0`〜`+0x100` RomFSスーパーブロックハッシュ
+- `+0xC0`-`+0xE0` ExeFS superblock hash (SHA256, 0x20 bytes)
+- `+0xE0`-`+0x100` RomFS superblock hash
 
-ExHeader `+0x200+0xD`のbit0が`CompressExefsCode`フラグ（`.code`がBLZ圧縮
-されているかどうか）。
+Bit 0 of ExHeader `+0x200+0xD` is the `CompressExefsCode` flag (whether
+`.code` is BLZ-compressed).
 
-### ExeFSヘッダ（0x200byte）
+### ExeFS header (0x200 bytes)
 
-- `+0x00`〜`+0xA0`: 10エントリ×16byte（name[8] + offset[4] + size[4]）
-- `+0xC0`〜`+0x200`: 10×32byte SHA256ハッシュ
+- `+0x00`-`+0xA0`: 10 entries × 16 bytes (name[8] + offset[4] + size[4])
+- `+0xC0`-`+0x200`: 10 × 32-byte SHA256 hashes
 
-**ハッシュは「エントリindex `i`の内容 → 固定10枠中のスロット`9-i`」に
-格納される**（ファイル数に応じた相対位置ではなく、常に末尾から埋まる
-固定レイアウト）。例えば4ファイル構成（`.code`=idx0, `banner`=idx1,
-`icon`=idx2, `logo`=idx3）の場合、ハッシュはスロット9,8,7,6に入り、
-スロット0-5は全ゼロになる。
+**Hashes are stored as "entry index `i`'s content → fixed slot `9-i` out of
+10"** (not a position relative to the number of files, but a fixed layout
+that always fills from the end). For example, with a 4-file configuration
+(`.code`=idx0, `banner`=idx1, `icon`=idx2, `logo`=idx3), the hashes go into
+slots 9, 8, 7, 6, and slots 0-5 are all zero.
 
-各ファイルデータのオフセットは0x200単位でアラインされる。
-全オフセット/サイズ値はmedia unit（×0x200）基準の符号なしu32。
+Each file's data offset is aligned to 0x200-byte units. All offset/size
+values are unsigned u32 in media-unit (×0x200) terms.

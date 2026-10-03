@@ -1,177 +1,193 @@
-# フィールドカメラ・エンカウントデータ(`LEVELDATA/`)仕様
+# Field Camera / Encounter Data (`LEVELDATA/`) Specification
 
-RomFS内`LEVELDATA/`フォルダに格納される、フィールドカメラ・エンカウント関連の
-データテーブル群。いずれも実機での動作確認・既存ツールとのクロスリファレンスで
-構造が確定済みの範囲のみ記載する(未確定箇所はその旨明記)。
+Data tables stored under the `LEVELDATA/` folder in RomFS, related to the
+field camera and encounters. Only structure confirmed via real-hardware
+testing and cross-referencing with existing tools is documented here
+(unconfirmed parts are explicitly marked as such).
 
-## 共通コンテナヘッダ
+## Common container header
 
-`LEVELDATA/`配下の多くのファイルは共通の16byteヘッダを持つ:
-
-```
-0x00-0x03: マジック/ハッシュ (4byte, ファイル内容依存で変化)
-0x04-0x07: レコード数 (int32)
-0x08-0x0B: レコードサイズ (int32)
-0x0C-0x0F: レコード数 (int32, 0x04-0x07と同値)
-0x10-    : レコード配列
-```
-
-## `dq7_camera_param.dat`(12レコード×36byte) — フィールド探索カメラの実体
-
-実機検証により、フィールド探索中のカメラに実際に使われているテーブルであることが
-確定している(`dq7_map_camera.dat`・`dq7_look_down_camera.dat`は通常のフィールド
-探索カメラには使われていないことを実機で確認済み)。
+Many files under `LEVELDATA/` share a common 16-byte header:
 
 ```
-+0x00: id (下位byteがID, 値0-9, 100, 101)
-+0x04: pos.yaw   (float, 度数)  — カメラの水平回転角
-+0x08: pos.pitch (float, 度数)  — カメラの見下ろし角(大きいほど真上に近づく)
-+0x0C: pos.dist  (float)        — カメラとプレイヤーの距離(極座標の動径成分)
-+0x10: target.x  (float, 未検証) — 注視点オフセット(プレイヤーからの相対位置と推測)
-+0x14: target.y  (float, 未検証)
-+0x18: target.z  (float, 未検証)
-+0x1C: near clip (float, 推定)  — 値を大きくしすぎると手前の地形がクリップされ画面が暗転する
-+0x20: far clip  (float, 推定)  — 値を小さくすると遠景の描画範囲が狭くなる
+0x00-0x03: magic/hash (4 bytes, varies with file content)
+0x04-0x07: record count (int32)
+0x08-0x0B: record size (int32)
+0x0C-0x0F: record count (int32, same value as 0x04-0x07)
+0x10-    : record array
 ```
 
-`pos`フィールドは直交座標ではなく**(ヨー角, ピッチ角, 距離)の極座標**であることが
-実機検証で確定している(3成分とも等倍しても角度構成は変化せず、距離成分のみの
-変更で純粋に遠近だけが変わる)。
+## `dq7_camera_param.dat` (12 records × 36 bytes) — the actual field-exploration camera
 
-### `dq7_map_camera.dat`(220レコード×52byte)
-
-カメラプリセットのデータ。`dq7_camera_param.dat`と同系統のレイアウト
-(id + pos.xyz + target.xyz + 距離/FOV関連値 + 未解読領域)を持つが、**実機の
-通常フィールド探索カメラには使われていないことが確認済み**(全レコード一括の
-極端な値変更でも見た目の変化なし)。用途未確定。
-
-## マップコード → フロアパラメータの連結
+Confirmed via real-hardware testing to be the table actually used by the
+camera during field exploration (`dq7_map_camera.dat` and
+`dq7_look_down_camera.dat` were confirmed on real hardware NOT to be used
+by the normal field exploration camera).
 
 ```
-MAP/_list.txt (行番号 = マップの通し番号)
-     │  同じ通し番号
++0x00: id (low byte is the ID, values 0-9, 100, 101)
++0x04: pos.yaw   (float, degrees)  — camera horizontal rotation angle
++0x08: pos.pitch (float, degrees)  — camera look-down angle (larger = closer to straight up)
++0x0C: pos.dist  (float)           — distance between camera and player (radial component of polar coordinates)
++0x10: target.x  (float, unverified) — look-at point offset (presumed relative to player position)
++0x14: target.y  (float, unverified)
++0x18: target.z  (float, unverified)
++0x1C: near clip (float, estimated) — setting this too large clips nearby terrain and darkens the screen
++0x20: far clip  (float, estimated) — setting this smaller narrows the far-draw distance
+```
+
+It has been confirmed via real-hardware testing that the `pos` field is
+**polar coordinates (yaw angle, pitch angle, distance)**, not Cartesian
+coordinates (scaling all three components equally does not change the
+angular configuration; changing only the distance component changes
+purely the near/far distance).
+
+### `dq7_map_camera.dat` (220 records × 52 bytes)
+
+Camera preset data. Has a layout of the same family as
+`dq7_camera_param.dat` (id + pos.xyz + target.xyz + distance/FOV-related
+values + an undecoded region), but **confirmed not to be used by the
+normal real-hardware field-exploration camera** (no visible change even
+with extreme value changes applied to all records at once). Purpose
+unconfirmed.
+
+## Map code → floor parameter chain
+
+```
+MAP/_list.txt (line number = map serial number)
+     │  same serial number
      ▼
-LEVELDATA/dq7_floor_list.dat (同インデックスでマップコード名を保持、可変長文字列レコード)
-     │  同じインデックス
+LEVELDATA/dq7_floor_list.dat (holds the map code name at the same index, variable-length string records)
+     │  same index
      ▼
-LEVELDATA/dq7_floor_param.dat (同インデックスで int32×3 を保持、12byte/レコード)
+LEVELDATA/dq7_floor_param.dat (holds int32×3 at the same index, 12 bytes/record)
 ```
 
-`dq7_floor_param.dat`の3番目のint32フィールドは下位1byteに`dq7_map_camera.dat`の
-インデックスを持つが、上記の通り`dq7_map_camera.dat`自体が実際のフィールド
-カメラには使われていないため、この対応の実際の用途は未確定。
+The 3rd int32 field of `dq7_floor_param.dat` holds a `dq7_map_camera.dat`
+index in its low byte, but since `dq7_map_camera.dat` itself is not used
+by the actual field camera (as noted above), the real purpose of this
+association is unconfirmed.
 
-## `dq7_encount_data.dat`(304レコード×56byte) — エンカウント本体
+## `dq7_encount_data.dat` (304 records × 56 bytes) — the encounter table itself
 
-### ファイル全体
+### Whole file
 
-- 共通16byteヘッダ(nrec=304, recsize=56)。
-- レコード0は全ゼロ(ダミー/番兵)。
-- 実データを持つレコードは167件。残り137件は「モンスター無し枠」。
+- Common 16-byte header (nrec=304, recsize=56).
+- Record 0 is all-zero (dummy/sentinel).
+- 167 records hold real data. The remaining 137 are "no monster" slots.
 
-### レコード構造(オフセットはレコード先頭から)
+### Record structure (offsets from the start of the record)
 
-| off | 型 | 内容 |
+| off | type | content |
 |---|---|---|
-| +0x00 | 4byte | マーカー(ほぼ全レコードで`00 FF FF FF`) |
-| +0x04 | u16 | 自己インデックス(配列上の位置と完全一致) |
-| +0x06 | u16×5 | arrayA: モンスターIDロスター。0=空きスロット、重複なし、概ね昇順 |
-| +0x10 | u16×4 | arrayB: 実フォーメーション(実際に出る4枠)。重複可。arrayAの部分集合とは限らない |
-| +0x18 | u16×2 | 実データレコードでは常に0(予約/未使用) |
-| +0x1c | u16 | 「レア客」枠。低確率で編成に加わる1体。重み(下記ブロック1)がスロット中最低になりやすく、メタル系・格上モンスターが置かれやすい |
-| +0x1e | u8 | 逃走(引き逃げ)判定レベル閾値。プレイヤーレベルがこの値を超えると敵が逃走する。モンスターありレコードは中央値≈33、空きレコードは99が多い |
-| +0x1f | u8 | 実データレコードはほぼ全件16固定(フラグ/フォーマット定数) |
-| +0x20 | u8×8 | mid: フォーメーション(出現数・隊列)の重み付き抽選表。`roll=rand(1..mid[7])`、最初に`roll<=mid[i]`となるiがテンプレ番号。テンプレi0=敵1体。値を小さくするほど小編成に寄る |
-| +0x28 | u8 | ゾーン固有の調整値(範囲11-41、釣鐘型分布)。実機検証でエンカウント頻度には影響しないことを確認済み。用途未確定 |
-| +0x29 | u8 | ほとんど0(未使用) |
-| +0x2a | u8 | ほぼ全件96(0x60)固定(意味不明の定数) |
-| +0x2b | u8 | ビットフィールドらしい分布(下位3bitが特定パターンに寄る)。意味未確定 |
-| +0x2c | u8 | ビットフィールドらしい分布(0/1が大半、他にbit3/4/5が立つ値)。意味未確定 |
-| +0x2d-0x31 | 5byte=10ニブル | ブロック1: スロット別「出現重み」表。下位ニブル先で読み、10ニブルが`[A0,A1,A2,A3,A4, B0,B1,B2,B3, +0x1c]`に1対1対応。空きスロットは必ず重み0、埋まったスロットは必ず重み1-9。メタル系スロットは平均的に低い重みを持つ |
-| +0x32 | u8 | ほぼ全件0(区切り/予約) |
-| +0x33-0x37 | 5byte=10ニブル | ブロック2: ブロック1と同じスロット対応の別軸の重み表(下位ニブル先、空きスロット=0)。意味の使い分けは未確定 |
+| +0x00 | 4 bytes | marker (`00 FF FF FF` for almost all records) |
+| +0x04 | u16 | self-index (exactly matches its position in the array) |
+| +0x06 | u16×5 | arrayA: monster ID roster. 0 = empty slot, no duplicates, roughly ascending |
+| +0x10 | u16×4 | arrayB: actual formation (the 4 slots that actually appear). May have duplicates; not necessarily a subset of arrayA |
+| +0x18 | u16×2 | always 0 in records with real data (reserved/unused) |
+| +0x1c | u16 | "rare visitor" slot. A single monster that joins the formation with low probability. Its weight (block 1 below) tends to be the lowest among slots, and metal-type/stronger monsters tend to be placed here |
+| +0x1e | u8 | flee (hit-and-run) judgment level threshold. If the player's level exceeds this value, enemies flee. Records with monsters have a median ≈ 33; empty records are mostly 99 |
+| +0x1f | u8 | fixed at 16 for almost all records with real data (flag/format constant) |
+| +0x20 | u8×8 | mid: weighted lottery table for the formation (enemy count/layout). `roll=rand(1..mid[7])`, the first `i` such that `roll<=mid[i]` is the template number. Template i0 = 1 enemy. Smaller values skew toward smaller formations |
+| +0x28 | u8 | zone-specific tuning value (range 11-41, bell-curve distribution). Confirmed on real hardware to have no effect on encounter frequency. Purpose unconfirmed |
+| +0x29 | u8 | mostly 0 (unused) |
+| +0x2a | u8 | fixed at 96 (0x60) for almost all records (meaning unclear constant) |
+| +0x2b | u8 | distribution that looks like a bitfield (lower 3 bits skew toward a specific pattern). Meaning unconfirmed |
+| +0x2c | u8 | distribution that looks like a bitfield (mostly 0/1, with some values having bit 3/4/5 set). Meaning unconfirmed |
+| +0x2d-0x31 | 5 bytes = 10 nibbles | block 1: per-slot "appearance weight" table. Read low-nibble-first; the 10 nibbles correspond 1:1 to `[A0,A1,A2,A3,A4, B0,B1,B2,B3, +0x1c]`. Empty slots always have weight 0, filled slots always have weight 1-9. Metal-type slots have a lower weight on average |
+| +0x32 | u8 | 0 for almost all records (separator/reserved) |
+| +0x33-0x37 | 5 bytes = 10 nibbles | block 2: a separate-axis weight table with the same slot mapping as block 1 (low-nibble-first, empty slot = 0). How the two axes are used differently is unconfirmed |
 
-特殊値: arrayAに991-999が入るレコード(12件)は通常のモンスターID範囲外の特殊コード
-(すれちがい通信・石版固定戦闘・モンスターパーク等、スクリプト側から差し込まれる
-枠と推測)。
+Special value: records (12 of them) where arrayA contains 991-999 are
+special codes outside the normal monster ID range (presumed to be slots
+injected from the script side, e.g. StreetPass, fixed tablet battles,
+Monster Park, etc.).
 
-### マップ→レコードの対応
+### Map → record mapping
 
 ```
-部屋コード文字列 (例: d07pf3)
-     │  dq7_encount_tile.dat で検索
+room code string (e.g. d07pf3)
+     │  looked up in dq7_encount_tile.dat
      ▼
-ゾーンID Z (dq7_encount_tile.dat +0x08/+0x09/+0x0a の3スロットのいずれか)
+zone ID Z (one of the 3 slots at dq7_encount_tile.dat +0x08/+0x09/+0x0a)
      │  Z → 2Z, 2Z+1
      ▼
-dq7_encount_data.dat レコード #2Z, #2Z+1
+dq7_encount_data.dat records #2Z, #2Z+1
 ```
 
-ゾーンIDが指す2レコード`(2Z, 2Z+1)`は、同一マップ内の異なるエリア(例: 南側/北側)で
-使い分けられる。マップ内のどのエリアがどちらのレコードを使うかの対応表の所在は
-未確定(マップパック内のタイル属性レイヤーにあると推測)。
+The two records `(2Z, 2Z+1)` pointed to by a zone ID are used separately
+for different areas within the same map (e.g. south side/north side). The
+location of the table mapping which area of a map uses which record is
+unconfirmed (presumed to be in a tile-attribute layer inside the map
+pack).
 
-### `dq7_encount_tile.dat`(747レコード×28byte)
+### `dq7_encount_tile.dat` (747 records × 28 bytes)
 
-| off | 内容 |
+| off | content |
 |---|---|
-| +0x03 | ほぼ全件0xFF |
-| +0x04 | u16 部屋固有ID(値域0-5270。`dq7_encount_data.dat`のインデックスとは別の値域で、間に上記のゾーンID変換が入る) |
-| +0x08 / +0x09 / +0x0a | 各1byteの「エンカウントゾーンID」枠が3つ。1部屋が条件別(地形/昼夜等)に最大3つの別ゾーンIDを持てる。値域0-151 |
-| +0x0b〜 | 部屋コード文字列(ASCII、NUL終端)。例: `d07pf3`=ダンジョン07・過去(`p`)・3階相当 |
+| +0x03 | 0xFF for almost all records |
+| +0x04 | u16 room-unique ID (range 0-5270. A separate value space from the `dq7_encount_data.dat` index; the zone-ID conversion above sits between them) |
+| +0x08 / +0x09 / +0x0a | three 1-byte "encounter zone ID" slots. A single room can have up to 3 different zone IDs depending on condition (terrain/time of day, etc.). Range 0-151 |
+| +0x0b〜 | room code string (ASCII, NUL-terminated). Example: `d07pf3` = dungeon 07, past (`p`), equivalent to floor 3 |
 
-### `dq7_field_symbol.dat`(159レコード×20byte) — 世界地図専用の徘徊シンボル表
+### `dq7_field_symbol.dat` (159 records × 20 bytes) — world-map-only roaming symbol table
 
 ```
-+0x00 u8  id (= レコード番号-1)
++0x00 u8  id (= record number - 1)
 +0x01-03  FF FF FF
-+0x04 f32 X (世界地図座標)
-+0x08 f32 Y (世界地図座標)
-+0x0c u16 mapId (dq7_encount_tile.dat / dq7_floor_list.dat の+0x04値と一致。例外なく世界地図`wld_*`系の行)
-+0x0e u16 symId (シンボル個体の一意ID。隣接サブ領域をまたぐ個体のみ同じ値を共有)
-+0x10 u32 (ほぼ常に0)
++0x04 f32 X (world map coordinate)
++0x08 f32 Y (world map coordinate)
++0x0c u16 mapId (matches the +0x04 value of dq7_encount_tile.dat / dq7_floor_list.dat; without exception, rows for the world map `wld_*`)
++0x0e u16 symId (unique ID per symbol instance; shared across adjacent sub-regions only for the same individual)
++0x10 u32 (almost always 0)
 ```
 
-このテーブルは**世界地図のシンボルのみ**を対象とする。ダンジョン等の屋内マップの
-シンボルはこの表に含まれず、その湧き位置はExeFS側(実行コード)で制御されている。
+This table covers **world-map symbols only**. Symbols on indoor maps such
+as dungeons are not included in this table; their spawn positions are
+controlled on the ExeFS (executable code) side.
 
-### `dq7_encount_pattern.dat`(145レコード×4byte)
+### `dq7_encount_pattern.dat` (145 records × 4 bytes)
 
-3レコード周期の`[id, 3byteビットマスク]`構造。マスクのpopcountがidの増加とともに
-広がっていく分布を持つ(確率カーブ、または有効スロットのビットフィールドと推測)。
-詳細な意味は未確定。
+A `[id, 3-byte bitmask]` structure with a period of 3 records. The mask's
+popcount has a distribution that widens as `id` increases (presumed to be
+a probability curve, or a bitfield of enabled slots). Exact meaning
+unconfirmed.
 
-## エンカウント発生頻度の制御箇所について
+## On where encounter frequency is controlled
 
-`dq7_encount_data.dat`(+0x1e, +0x28, テール領域)・`dq7_ai_param.dat`(174レコード×
-48byte、+0x24-0x28)・`dq7_floor_param.dat`(+0x04)の各フィールドを実機で変更検証
-した範囲では、**フィールド上のシンボル湧き頻度・エンカウント発生頻度そのものを
-制御するフィールドはRomFS側データには見つかっていない**。発生頻度の制御は
-ExeFS側の実行コードにあると考えられる。
+Within the range tested by changing fields on real hardware —
+`dq7_encount_data.dat` (+0x1e, +0x28, the tail region),
+`dq7_ai_param.dat` (174 records × 48 bytes, +0x24-0x28), and
+`dq7_floor_param.dat` (+0x04) — **no field controlling the actual symbol
+spawn frequency / encounter occurrence frequency on the field has been
+found in RomFS-side data**. Frequency control is believed to live in the
+ExeFS-side executable code.
 
-## 付録: `dq7_item_list.dat`(670レコード×52byte) — 装備効果パラメータ
+## Appendix: `dq7_item_list.dat` (670 records × 52 bytes) — equipment effect parameters
 
-エンカウント抑止アイテムの効果を辿る過程で判明した、アイテムデータの構造。
+The structure of item data, discovered while tracing the effect of
+encounter-deterrent items.
 
-| off | 型 | 内容 |
+| off | type | content |
 |---|---|---|
-| +0x00 | u16 | タイプ/フラグ |
-| +0x08 | u16 | 名前文字列ID |
-| +0x0c | u32 | 使用効果リソース/メッセージ雛形へのポインタ(消耗品は少数のリソースを共用) |
-| +0x10 | u16 | 買値(0=非売品) |
-| +0x14 | u16 | 売値 |
-| +0x16 | u16 | 説明文テキストID |
-| +0x1a | u16 | 効果ID/カタログID(素の装備は0、それ以外はほぼアイテムごとに一意) |
-| +0x1c | u16 | 効果パラメータ |
-| +0x20 | u8 | アイテムID(=レコード番号) |
-| +0x22 | s16 | `+0x2c`が指すパラメータへの加算値(武器=攻撃力、防具=守備力等) |
-| +0x24 | s16 | 補正値(多くは+0x22と同値。武器では負値のことがあり命中/会心または両手持ちペナルティと推測) |
-| +0x28 | u8 | 追加ステータス(各種耐性等) |
-| +0x2c | u8 | 効果対象パラメータ種別(実機確認済み: 1=攻撃力 2=守備力 3=すばやさ 4=かしこさ。他に5=運勢系アクセサリ、6=消耗品、7=その他消耗品、8=重要/イベント/未分類、9=石/特殊、0=効果なし。1-4はステータスメニューの並びと一致) |
-| +0x2d | u8 | 装備スロット/小分類(1=武器 2=体防具 3=頭 4=脚系 5=アクセサリ 6=消耗品 7=カギ 9/11=重要 12=石) |
-| +0x33 | u8 | ショップ系ビットフィールド(売買可否等) |
+| +0x00 | u16 | type/flags |
+| +0x08 | u16 | name string ID |
+| +0x0c | u32 | pointer to the use-effect resource/message template (consumables share a small set of resources) |
+| +0x10 | u16 | buy price (0 = not for sale) |
+| +0x14 | u16 | sell price |
+| +0x16 | u16 | description text ID |
+| +0x1a | u16 | effect ID / catalog ID (0 for plain equipment, otherwise unique per item in most cases) |
+| +0x1c | u16 | effect parameter |
+| +0x20 | u8 | item ID (= record number) |
+| +0x22 | s16 | additive value to the parameter pointed to by `+0x2c` (weapons = attack power, armor = defense, etc.) |
+| +0x24 | s16 | correction value (often equal to +0x22; for weapons can be negative, presumed to be an accuracy/critical or two-handed penalty) |
+| +0x28 | u8 | additional status (various resistances, etc.) |
+| +0x2c | u8 | target parameter type for the effect (confirmed on real hardware: 1=attack power, 2=defense, 3=agility, 4=wisdom. Also 5=luck-type accessory, 6=consumable, 7=other consumable, 8=important/event/uncategorized, 9=stone/special, 0=no effect. 1-4 match the order in the status menu) |
+| +0x2d | u8 | equipment slot/subcategory (1=weapon, 2=body armor, 3=head, 4=leg-type, 5=accessory, 6=consumable, 7=key item, 9/11=important, 12=stone) |
+| +0x33 | u8 | shop-related bitfield (buyable/sellable, etc.) |
 
-`dq7_apprise_item.dat`(664レコード×40byte)は純粋な説明文/テキストポインタ表で、
-効果の種類に関する情報は持たない。アイテムの実際の効果(エンカウント抑止等)は
-RomFSデータには記述がなく、ExeFS側が効果ID(`+0x1a`)またはアイテムIDで
-ディスパッチしていると考えられる。
+`dq7_apprise_item.dat` (664 records × 40 bytes) is a pure
+description/text-pointer table and holds no information about effect
+type. The actual effects of items (encounter deterrence, etc.) are not
+described in RomFS data, and are believed to be dispatched on the ExeFS
+side by effect ID (`+0x1a`) or item ID.

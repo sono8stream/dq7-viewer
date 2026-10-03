@@ -1,77 +1,109 @@
-# パーティ関連メモリ/セーブ構造
+# Party-Related Memory/Save Structure
 
-## セーブ内の固定配列
+## Fixed arrays in the save
 
-セーブデータ内、以下の2配列はいずれも**6要素固定**であり、直後に隣接する別セクションが
-存在する（拡張の余地なし）。
+Within the save data, the following two arrays are both **fixed at 6
+elements**, with a different section immediately adjacent right after them
+(no room for expansion).
 
-- **Party（隊列）配列**: オフセット `0x0510`、要素は `u32`（キャラID）×6。
-  `0x0510 + 6*4 = 0x0528` の直後は Gold フィールドに連続している。
-- **Charactors（ステータス本体）配列**: オフセット `0x0C80`、要素stride `0x1EC`（3DS版）×6。
-  `0x0C80 + 6*0x1EC = 0x1808` の直後は `OPTN`（オプション設定）セクションのヘッダに連続している。
-- Charactors配列のスロット `i` は PLAYER_NAME体系のキャラID `i+1`（0=ID1 … 5=ID6）に対応する
-  ことを実セーブのバイト内容から確認済み。
+- **Party (formation) array**: offset `0x0510`, elements are `u32`
+  (character ID) × 6. Right after `0x0510 + 6*4 = 0x0528` comes the Gold
+  field, contiguously.
+- **Charactors (status body) array**: offset `0x0C80`, element stride
+  `0x1EC` (3DS version) × 6. Right after `0x0C80 + 6*0x1EC = 0x1808` comes
+  the header of the `OPTN` (options) section, contiguously.
+- Slot `i` of the Charactors array has been confirmed, from the byte
+  contents of actual save files, to correspond to character ID `i+1` in the
+  PLAYER_NAME system (0 = ID1 … 5 = ID6).
 
-## キャラID空間
+## Character ID space
 
-- `MENULIST/party_menu.txt` / `TEXT/PLAYER_NAME.txt` によるID→名前の対応がゲーム全体で
-  共通して使われる。ID1〜6が本編の固定プレイアブル枠。
-- ID7・ID8はセーブのCharactors配列に専用枠を持たない、一時加入型のキャラクター。
+- The ID→name mapping via `MENULIST/party_menu.txt` / `TEXT/PLAYER_NAME.txt`
+  is used consistently throughout the game. IDs 1–6 are the fixed main-story
+  playable slots.
+- IDs 7 and 8 are temporary-join characters that do not have a dedicated
+  slot in the save's Charactors array.
 
-## ExeFS側の該当関数（ARM、32bit固定長命令、file offsetはベースゲーム基準）
+## Corresponding functions on the ExeFS side (ARM, 32-bit fixed-length
+instructions, file offsets are base-game-relative)
 
-- `PlayerParty::addMember`（file offset `0x188c08`）: 隊列配列（6要素固定、`cmp r0,6`で
-  終了するループ）の空きスロットにキャラIDを書き込むだけ。ステータスの生成・参照は行わない。
-- `fcn.0018aaf4`（`PlayerManager::addPlayer`の本体、デバッグフラグ経由で末尾呼び出しされる）:
-  既存メンバーの座標シフト・見た目初期化・隊列再構築・`PlayerManager::setPartyControl`呼び出し
-  を行うが、ステータス値そのものは書き込まない。
-- `PlayerDataContainer::initialize`（file offset `0x12ce18`）: `r4=1`から`r4=46`未満まで
-  （id=1〜45）ループし、各IDについて `PlayerData::setup(this=slot, arg2=id, jobId=id)` を
-  呼ぶ。スロットアドレスは `this + (id*133)*8 + 8`（＝1キャラあたり1064byte間隔の配列）。
-  このループは**セーブの有無に関わらず常に全キャラ分実行される**。
-- `PlayerDataContainer::deserialize`（file offset `0x23e43c`）: 同一のスロットアドレス式を
-  使い、ただしループ範囲は**id=1〜6のみ**（`cmp r4,7`、未改造版は`cmp r4,6`）。セーブ内の
-  Charactorsブロック（stride `0x1ec`）の値でこの範囲だけを上書きする。
-- 上記2関数の組み合わせにより: id=1〜45全員がまず`character_init_data.dat`由来の値で
-  構築され、その後id=1〜6だけがセーブの値で上書きされる。id=7以降は
-  `character_init_data.dat`由来の値がそのまま使われ続ける。
+- `PlayerParty::addMember` (file offset `0x188c08`): simply writes the
+  character ID into an empty slot of the formation array (fixed 6 elements,
+  loop terminated by `cmp r0,6`). Does not generate or reference status
+  values.
+- `fcn.0018aaf4` (the body of `PlayerManager::addPlayer`, called at the tail
+  end via a debug flag): shifts existing members' coordinates, initializes
+  appearance, rebuilds the formation, and calls
+  `PlayerManager::setPartyControl`, but does not write the status values
+  themselves.
+- `PlayerDataContainer::initialize` (file offset `0x12ce18`): loops from
+  `r4=1` to below `r4=46` (id = 1–45), calling
+  `PlayerData::setup(this=slot, arg2=id, jobId=id)` for each ID. The slot
+  address is `this + (id*133)*8 + 8` (i.e. an array spaced 1064 bytes per
+  character). This loop **always runs for all characters regardless of
+  whether a save exists**.
+- `PlayerDataContainer::deserialize` (file offset `0x23e43c`): uses the same
+  slot-address formula, but the loop range is **id = 1–6 only**
+  (`cmp r4,7`; `cmp r4,6` in the unmodified version). It overwrites only
+  this range with values from the Charactors block in the save (stride
+  `0x1ec`).
+- Combining the above two functions: all of id = 1–45 are first built from
+  values derived from `character_init_data.dat`, after which only id = 1–6
+  are overwritten with save values. From id = 7 onward, the values derived
+  from `character_init_data.dat` continue to be used as-is.
 
-## `PlayerData::setup`（file offset `0x223ab4`）
+## `PlayerData::setup` (file offset `0x223ab4`)
 
-- 引数 `(this, arg2, jobId)`。`jobId`は呼び出し直後に `this+0x14` へ1byteで保存される。
-- 冒頭、渡されたID値が1〜6かどうかで分岐があり、1〜6の場合のみ追加の初期化処理
-  （未解析の`fcn.19b2fc`等4つの関数呼び出し）を経由する。id7以降はこの追加初期化を
-  経由せず、共通処理のみを受ける。
-- 共通処理では `dq7_character_init_data.dat`（テーブル記述子 `0x3eed28`/`0x672f98`、
-  汎用テーブル引きヘルパー `fcn.001949d8` 経由）の該当レコードから複数フィールドを
-  `this`へコピーする。
-- 関数末尾で、第3のテーブル（記述子 `0x3ef540`/`0x679994`、職業IDでインデックス）の
-  レコード `+0x3d`（HP倍率）・`+0x3e`（MP倍率、同型処理）を使い、
-  `this`自身が既に保持するベース値（`+0x24`=HPベース、`+0x2a`=MPベース）に対して
-  `最終値 = floor(ベース値 × 倍率 ÷ 10)` という固定小数点演算を行い、
-  `HaveStatus::setHpMax`（file offset `0x123bf0`）/ `setMpMax`（`0x123b98`）へ渡す。
-- `+0x24`/`+0x2a`（HP/MPベース）自体がどこで埋められるかは、
-  `dq7_character_init_data.dat`のレコード内フィールド（後述）に直接由来することを
-  実データ比較で確認済み（下記「character_init_data.dat」参照）。
+- Arguments `(this, arg2, jobId)`. `jobId` is stored as 1 byte into
+  `this+0x14` immediately after the call.
+- At the start, there is a branch on whether the given ID value is 1–6; only
+  for 1–6 does it go through additional initialization processing (4
+  unanalyzed function calls such as `fcn.19b2fc`). id = 7 and above skip
+  this additional initialization and receive only the common processing.
+- In the common processing, multiple fields are copied into `this` from the
+  corresponding record of `dq7_character_init_data.dat` (table descriptor
+  `0x3eed28`/`0x672f98`, via the generic table-lookup helper
+  `fcn.001949d8`).
+- At the end of the function, using a third table (descriptor
+  `0x3ef540`/`0x679994`, indexed by job ID), record fields `+0x3d` (HP
+  multiplier) and `+0x3e` (MP multiplier, processed the same way), it
+  performs the fixed-point computation
+  `final value = floor(base value × multiplier ÷ 10)` against the base
+  values `this` already holds (`+0x24` = HP base, `+0x2a` = MP base), and
+  passes the result to `HaveStatus::setHpMax` (file offset `0x123bf0`) /
+  `setMpMax` (`0x123b98`).
+- It has been confirmed via actual-data comparison that `+0x24`/`+0x2a` (HP/MP
+  base) themselves are filled directly from fields inside the
+  `dq7_character_init_data.dat` record (described below; see
+  "character_init_data.dat").
 
-## 画面表示側の制約（`CommonStatusWindowGroup::resetChildren`, file offset `0x144a58`）
+## Display-side constraint (`CommonStatusWindowGroup::resetChildren`, file
+offset `0x144a58`)
 
-- ステータスメニューの表示ループは `r4=0〜3` の4回固定（`cmp r4,4`）。
-  これは隊列スロット番号に対する固定回数であり、キャラIDやキャラ種別を判定する分岐は
-  この関数内に存在しない。表示可否は「生きている隊列人数」とスロット番号の比較のみで決まる。
+- The status menu's display loop is fixed at 4 iterations, `r4=0–3`
+  (`cmp r4,4`). This is a fixed count against formation slot numbers; there
+  is no branch inside this function that judges by character ID or
+  character type. Whether a slot is shown is determined purely by comparing
+  "number of living formation members" against the slot number.
 
-## 別系統の `id<7` ハードコード（`fcn.0021a220`, file offset `0x21a220`）
+## A separate `id<7` hardcoding (`fcn.0021a220`, file offset `0x21a220`)
 
-- 4つの固定グローバルアドレス（`0x542938`〜`0x542944`）から値を読み、各値が0でなく
-  かつ7未満のものだけを採用して `PlayerParty::reorder`（`0x188c4c`）へ渡す処理がある。
-  これは通常の隊列処理とは別系統で、特殊な強制パーティ構成（`dq7_special_party.dat`系と
-  推定）を扱っている可能性が高く、上記の通常ステータスメニュー表示経路とは無関係。
+- There is processing that reads values from 4 fixed global addresses
+  (`0x542938`–`0x542944`), adopts only the ones that are nonzero and less
+  than 7, and passes them to `PlayerParty::reorder` (`0x188c4c`). This is a
+  separate system from the usual formation processing, and is likely
+  handling a special forced party composition (estimated to be related to
+  `dq7_special_party.dat`), unrelated to the normal status-menu display path
+  described above.
 
-## 未確定・未解明の点
+## Unconfirmed / unresolved points
 
-- `PlayerData::setup`の`arg2`の正確な意味。
-- `+0x24`/`+0x2a`への書き込みが`setup()`内部のどの区間で行われるか（関数外ではなく
-  内部の未解析区間である可能性が高いところまでは絞り込み済み）。
-- `category_code`相当のフィールドが「操作可能/AIキャラ」判定へどう伝達されるかの
-  完全な経路（部分的な関連は確認したが主分岐自体は別要因＝隊列スロット番号のビット関係
-  で制御されていることが判明しており、単純な1対1の分岐ではない）。
+- The exact meaning of `arg2` in `PlayerData::setup`.
+- Exactly where within `setup()` the writes to `+0x24`/`+0x2a` occur (narrowed
+  down to very likely being an unanalyzed internal region rather than
+  outside the function).
+- The complete path by which a field equivalent to `category_code` feeds
+  into the "controllable / AI character" determination (a partial
+  relationship has been confirmed, but the main branch itself has turned
+  out to be controlled by a different factor — bit relationships on the
+  formation slot number — rather than a simple 1:1 branch).

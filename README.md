@@ -1,40 +1,43 @@
-[English](README.en.md)
+[日本語](README.ja.md)
 
 # DQ7 Viewer
 
-ニンテンドー3DS版『ドラゴンクエストVII エデンの戦士たち』のROMフォーマットを
-解析して作ったWebベースのビュアー・エディタです。
+A web-based viewer & editor for Dragon Quest VII (Nintendo 3DS) ROM data,
+built from original binary format analysis.
 
-🚧 開発中です。粗い部分・未実装の機能があります。
+🚧 Work in progress / early stage — actively being developed, expect rough
+edges and missing features.
 
-## これは何か
+## What this is
 
-- `webapp/`: 抽出したRomFS/ExeFSのデータを閲覧・編集するためのローカルWebアプリ
-  （Python標準ライブラリの`http.server`ベース、依存は最小限）
-- `docs/formats/`: 解析で判明した、各種データ/バイナリフォーマットの構造仕様
-  （オフセット・フィールド定義・アルゴリズム）。英語版は各ファイルと同じ
-  フォルダに`.en.md`として用意しています。
+- `webapp/`: a local web app for browsing/editing extracted RomFS/ExeFS data
+  (built on Python's standard `http.server`, minimal dependencies)
+- `docs/formats/`: format specifications discovered through analysis
+  (offsets, field definitions, algorithms). Each document has an English
+  (`.md`) and Japanese (`.ja.md`) version side by side.
 
-## これは何でないか
+## What this is not
 
-- **ROM・CIA・セーブデータそのものは一切含まれていません。** このリポジトリは
-  解析ツールと解析結果（構造の事実）のみを公開するものです。
-- `docs/formats/`配下のドキュメントは、調査の試行錯誤の過程やゲーム内の会話文・
-  メッセージ本文の引用を含まない、構造的事実のみの技術仕様書として書き起こして
-  います。
+- **No ROM, CIA, or save data is included.** This repository publishes only
+  the analysis tooling and the factual results of the analysis (data
+  structure specs).
+- The documents under `docs/formats/` are written as pure structural
+  reference: no investigation narrative, and no quoted in-game dialogue or
+  message text.
 
-## 使い方
+## Usage
 
-本ビュアーを動かすには、**あなた自身が合法的に所有するROM**から抽出した
-RomFSのデータが別途必要です。このリポジトリにはROMの吸い出し・RomFS抽出
-手順やツールは含まれていません。
+To run the viewer you need RomFS data extracted from **a ROM you legally
+own**. This repository does not include ROM-dumping or RomFS-extraction
+tools or steps.
 
-### ROMデータの配置方法
+### Placing your ROM data
 
-リポジトリ直下（`webapp/`と同じ階層）に`rom/extracted/`というフォルダを作り、
-その中にRomFSを展開したときの中身（`SCRIPT/` `MESS/` `LEVELDATA/` `CHARACTER/`
-`MONSTER/` `TEXT/` `MENULIST/` `TEXTURE/` `MAP/` 等、RomFS本来のフォルダ名の
-まま）をそっくりそのまま配置してください。
+At the repository root (the same level as `webapp/`), create a folder
+`rom/extracted/` and put the contents of your extracted RomFS inside it
+as-is, keeping RomFS's original folder names (`SCRIPT/`, `MESS/`,
+`LEVELDATA/`, `CHARACTER/`, `MONSTER/`, `TEXT/`, `MENULIST/`, `TEXTURE/`,
+`MAP/`, etc.).
 
 ```
 dq7-viewer/
@@ -50,79 +53,80 @@ dq7-viewer/
         ├── MENULIST/
         ├── TEXTURE/
         ├── MAP/
-        └── ...(RomFSの他のフォルダも同様にそのまま)
+        └── ...(and any other RomFS folders, as-is)
 ```
 
-`rom/`フォルダ自体は`.gitignore`で追跡対象外にしてあるので、配置しても誤って
-コミットされることはありません。RomFSの吸い出し・展開（CIAからの抽出等）は
-GodMode9やCTR系ツールなど、既存の3DS ROMツールを各自利用してください
-（本リポジトリはその工程を含みません）。
+`rom/` is already excluded via `.gitignore`, so placing your data there
+won't accidentally get committed. Use existing 3DS ROM tools (e.g. GodMode9,
+CTR-format tools) to dump your cartridge/CIA and extract its RomFS — that
+process itself is not part of this repository.
 
-### 起動
+### Running it
 
 ```
 cd webapp
 python3 server.py
 ```
 
-詳細な起動オプション・APIについては`webapp/server.py`を参照してください。
+See `webapp/server.py` for startup options and the API.
 
-## フォーマットドキュメント一覧
+## Format documentation index
 
-`docs/formats/`配下はROMの主要な構成要素に対応するサブフォルダに分かれています。
+`docs/formats/` is split into subfolders that mirror the game's main data
+areas.
 
-### `exefs/` — ExeFS(`.code`実行コード)内部構造
+### `exefs/` — ExeFS (`.code` executable) internals
 
-| ファイル | 対象 |
+| File | Covers |
 |---|---|
-| `exefs_master_structures.md` | ExeFS内フィールド/エンカウント関連構造 |
-| `exefs_symbol_recovery.md` | ExeFSの関数シンボル情報 |
-| `save_player_data_container.md` | PlayerDataContainerとNCCH/ExeFSコンテナ構造 |
-| `party_change_menu.md` | パーティ変更系メニューの内部構造 |
-| `scriptgroup_chapter_flags.md` | 章番号とイベントフラグの更新構造 |
-| `symbol_notes.md` | フィールドシンボル関連データの構造メモ |
-| `gameflag_bitfield.md` | GameFlagのビットフィールド構造 |
+| `exefs_master_structures.md` | Field/encounter-related structures inside ExeFS |
+| `exefs_symbol_recovery.md` | ExeFS function symbol recovery |
+| `save_player_data_container.md` | `PlayerDataContainer` and the NCCH/ExeFS container format |
+| `party_change_menu.md` | Internals of the party-change menus |
+| `scriptgroup_chapter_flags.md` | How chapter number and event flags are updated together |
+| `symbol_notes.md` | Notes on field-symbol related data |
+| `gameflag_bitfield.md` | `GameFlag` bitfield structure |
 
-### `save/` — セーブファイル構造
+### `save/` — save file structure
 
-| ファイル | 対象 |
+| File | Covers |
 |---|---|
-| `save_data_structures.md` | セーブデータ全体構造 |
-| `play_time_field.md` | プレイ時間フィールド |
-| `player_party_layout.md` | パーティ関連メモリ/セーブ構造 |
+| `save_data_structures.md` | Overall save data layout |
+| `play_time_field.md` | Play-time field |
+| `player_party_layout.md` | Party-related memory/save layout |
 
-### `script/` — SCRIPTバイトコード
+### `script/` — SCRIPT bytecode
 
-| ファイル | 対象 |
+| File | Covers |
 |---|---|
-| `script_opcodes.md` | SCRIPTファイル(イベントスクリプト)フォーマット |
+| `script_opcodes.md` | `SCRIPT/*.bin` (event script) format |
 
-### `leveldata/` — `LEVELDATA/*.dat`系データテーブル
+### `leveldata/` — `LEVELDATA/*.dat` tables
 
-| ファイル | 対象 |
+| File | Covers |
 |---|---|
-| `camera_and_encounter_data.md` | フィールドカメラ・エンカウントデータ |
-| `character_status_data.md` | キャラクターステータス関連データファイル |
-| `character_identity.md` | モデル番号⇔キャラID対応 |
-| `partytalk_format.md` | partytalk系LEVELDATAファイルのフォーマット |
-| `map_code_naming.md` | マップファイルID⇔地名の対応構造 |
-| `mamono_master_classes.md` | モンスターがなつくシーケンスのバトルタスク構造 |
-| `debug_data_tables.md` | 開発者向けデバッグ関連データ |
-| `motion_index_manager.md` | モーション解決パイプライン |
+| `camera_and_encounter_data.md` | Field camera and encounter data |
+| `character_status_data.md` | Character status data files |
+| `character_identity.md` | Model number ⇔ character ID mapping |
+| `partytalk_format.md` | partytalk-series LEVELDATA file format |
+| `map_code_naming.md` | Map file ID ⇔ in-game location mapping |
+| `mamono_master_classes.md` | Battle task structure for the "monster tames you" sequence |
+| `debug_data_tables.md` | Developer debug-related data |
+| `motion_index_manager.md` | Motion resolution pipeline |
 
-### `models/` — 3Dモデル・アニメーション・画像
+### `models/` — 3D models, animation, images
 
-| ファイル | 対象 |
+| File | Covers |
 |---|---|
-| `bcmdl_format.md` | 3DモデルフォーマットCGFX(BCRES) / `.bcmdl` |
-| `canm_format.md` | 骨格アニメーション(CANM)フォーマット |
-| `character_job_assets.md` | キャラクタービジュアルアセットの配置規則 |
-| `face_expression_textures.md` | 表情差分テクスチャの格納形式 |
-| `image_containers.md` | 画像コンテナ形式(bctex/bcmdl/dmp/fpt) |
+| `bcmdl_format.md` | CGFX (BCRES) / `.bcmdl` 3D model format |
+| `canm_format.md` | Skeletal animation (CANM) format |
+| `character_job_assets.md` | Character visual asset layout rules |
+| `face_expression_textures.md` | Facial expression (blink/lip-sync) texture storage |
+| `image_containers.md` | Image container formats (bctex/bcmdl/dmp/fpt) |
 
-## 注意点
+## Notes
 
-本リポジトリが公開するのは、解析によって判明したデータ構造に関する事実の記述と、
-それを閲覧するための自作ツールのソースコードのみです。ゲームの著作物（ROM本体、
-テキスト、画像、音声等）やその複製物は一切含みません。本ツールの利用にあたっては、
-自身が適法に所有するソフトウェアからのみデータを抽出してください。
+This repository publishes only the factual data-structure findings from
+analysis, and the source code of the viewer used to browse them. It
+contains no copyrighted game assets (ROM itself, text, images, audio, or
+copies thereof). Only extract data from software you legally own.

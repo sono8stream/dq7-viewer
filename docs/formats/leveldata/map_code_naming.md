@@ -1,70 +1,85 @@
-# マップファイルID ⇔ ゲーム内地名の対応構造
+# Mapping Between Map File IDs and In-Game Location Names
 
-`MAP/_list.txt`・`SCRIPT/*.bin`のファイル名（例: `h01nout1`, `d06pf1a`）は
-内部コードで、地名を直接表さない。
+File names in `MAP/_list.txt` / `SCRIPT/*.bin` (e.g. `h01nout1`,
+`d06pf1a`) are internal codes and do not directly spell out a location
+name.
 
-## マップコードの命名規則（観測ベース）
-
-```
-[エリア系列を表す英字][2桁の番号][p または n][個別マップの接尾辞]
-```
-
-- 英字: エリア/ダンジョンの系列（`MAP/_list.txt`には約255系列存在）
-- 2桁の番号: 同系列内の通し番号（同じ地名でも章が進むと番号が変わることがある）
-- `p` / `n`: 過去(past) / 現代(present/now)
-- 接尾辞: `out`(屋外), `f1`〜(建物内階層), `b1`〜(地下/裏マップ), `m1f1`〜
-  (民家等の個別建物)のように個別マップを識別する
-
-`MAP/_list.txt`の行番号（1始まり）は`LEVELDATA/dq7_floor_list.dat`/
-`dq7_floor_param.dat`のレコードインデックスと一致する。ただしこの行番号が
-下記の地名参照テーブルのインデックスと直接一致するとは限らない。
-
-## 地名の参照テーブル
-
-### `MENULIST/place_menu.txt`（主要地名、311件）
-
-`#番号,,地名`形式。主要な町・ダンジョンの名前一覧（メニューの「現在地」
-表示等に使われると推測）。
-
-### `MENULIST/floor_menu.txt`（詳細フロア名、13890件）
-
-`#番号,グループ番号,フロア名`形式。建物内の各階まで含めた詳細名。グループ
-番号列は`place_menu.txt`の番号と対応しているらしい（未確認）。
-
-**注意**: `floor_menu.txt`の`#番号`列は`dq7_floor_list.dat`の`floor_id`と
-一致しない。独立したメニュー表示用の通し番号であり、同じ数値でも指す実体が
-異なりうる。地名からfloor_idを機械的に逆引きする確実な手段は無く、スクリプト
-中のメッセージ本文を直接確認する必要がある。
-
-## フロアID ⇔ マップコードの対応表（`dq7_floor_list.dat`）
-
-「フロアID → マップコード名」の対応表がそのまま入っている。16byteレコード
-（テーブルは0x20開始）:
+## Map code naming convention (based on observation)
 
 ```
-+0x04 (u16): フロアID
-+0x06 (u16): 系列グループ番号
-+0x08 (char[8]): マップコード名（例: c01nout, m01nm2f2, wld_n25a）
+[letters identifying the area series][2-digit number][p or n][per-map suffix]
 ```
 
-このフロアIDはSCRIPTのマップ移動命令opcode `0x0001001f`の第0引数と一致する。
+- Letters: the area/dungeon series (`MAP/_list.txt` has about 255 series)
+- 2-digit number: a serial number within the same series (the number can
+  change for the same location as the chapter progresses)
+- `p` / `n`: past / present(now)
+- Suffix: identifies the individual map, e.g. `out` (outdoors), `f1`...
+  (floors inside a building), `b1`... (basement/back map), `m1f1`...
+  (individual buildings such as houses)
 
-## 地名を特定する再現可能な手順
+The line number (1-based) in `MAP/_list.txt` matches the record index in
+`LEVELDATA/dq7_floor_list.dat` / `dq7_floor_param.dat`. However, this line
+number does not necessarily match the index of the location-name
+reference tables described below.
 
-未調査のマップコードについて地名を特定したい場合:
+## Location name reference tables
 
-1. 対象の`SCRIPT/<mapcode>.bin`を読み、メッセージ表示オペコード（`09 00 03
-   00`, `0B 00 01 00`, `0D 00 01 00`など）を探す。
-2. 見つかったオペコードの直後4byteがメッセージID（u32 LE）。
-3. `MESS/#XXX000.fpt`（`XXX000`=メッセージIDを1000で切り捨てた値）を開き、
-   FPT0フォーマットでファイル名`#<メッセージID>.txt`のエントリを探す。
-   エントリのmsg_offsetはファイル先頭からの絶対オフセットではなく、
-   `data_start`からの相対オフセットである点に注意。
-4. 該当メッセージのテキストを読み、地名・人物名・状況から特定する。
-5. `MENULIST/place_menu.txt`・`floor_menu.txt`で該当しそうな地名を照合する。
+### `MENULIST/place_menu.txt` (major location names, 311 entries)
 
-## 既知の未解決事項
+Format `#number,,location name`. A list of names for major towns and
+dungeons (presumed to be used for things like the "current location"
+display in menus).
 
-- `place_menu.txt`の2列目（グループ番号らしき値）と`MAP/_list.txt`の
-  グループコードとの対応関係は未解読。
-- 255系列すべてのマップコードを地名にマッピングする網羅的な対応表は未作成。
+### `MENULIST/floor_menu.txt` (detailed floor names, 13890 entries)
+
+Format `#number,group number,floor name`. Detailed names including each
+floor inside a building. The group number column appears to correspond to
+the numbers in `place_menu.txt` (unconfirmed).
+
+**Note**: the `#number` column of `floor_menu.txt` does NOT match the
+`floor_id` of `dq7_floor_list.dat`. It is an independent serial number for
+menu display purposes, and the same numeric value may refer to a different
+entity. There is no reliable way to mechanically reverse-derive a floor_id
+from a location name; the message text inside the script must be checked
+directly.
+
+## Floor ID ⇔ map code correspondence table (`dq7_floor_list.dat`)
+
+Contains a direct "floor ID → map code name" correspondence table.
+16-byte records (the table starts at 0x20):
+
+```
++0x04 (u16): floor ID
++0x06 (u16): series group number
++0x08 (char[8]): map code name (e.g. c01nout, m01nm2f2, wld_n25a)
+```
+
+This floor ID matches argument 0 of the SCRIPT map-move opcode
+`0x0001001f`.
+
+## Reproducible procedure to identify a location name
+
+To identify the location name for an uninvestigated map code:
+
+1. Read the target `SCRIPT/<mapcode>.bin` and search for a message-display
+   opcode (e.g. `09 00 03 00`, `0B 00 01 00`, `0D 00 01 00`).
+2. The 4 bytes immediately after the found opcode are the message ID
+   (u32 LE).
+3. Open `MESS/#XXX000.fpt` (`XXX000` = the message ID truncated down to
+   the nearest 1000) and look up the entry for file name
+   `#<message ID>.txt` in its FPT0 format. Note that the entry's
+   `msg_offset` is not an absolute offset from the start of the file, but
+   a relative offset from `data_start`.
+4. Read the corresponding message text and identify the location from the
+   place name, people's names, and situation it describes.
+5. Cross-check against `MENULIST/place_menu.txt` / `floor_menu.txt` for a
+   plausible location name.
+
+## Known unresolved points
+
+- The correspondence between the 2nd column of `place_menu.txt`
+  (apparently a group number) and the group codes of `MAP/_list.txt` has
+  not been decoded.
+- An exhaustive table mapping all 255 series of map codes to location
+  names has not been created.

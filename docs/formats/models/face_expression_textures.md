@@ -1,33 +1,37 @@
-# 表情差分(瞬き・口パク)テクスチャの格納形式
+# Facial Expression (Blink / Lip-Sync) Texture Storage Format
 
-`CHARACTER/pXXXX_jNN.bcmdl.lz`に埋め込まれている`_kao`(素顔ベース)/`_e0`(目)/`_m0`
-(口)のテクスチャは、いずれも静止画1枚のみで差分バリエーションを持たない。
+The `_kao` (plain base face) / `_e0` (eyes) / `_m0` (mouth) textures
+embedded in `CHARACTER/pXXXX_jNN.bcmdl.lz` are each a single static image
+with no variant frames.
 
-瞬きや会話中の口パクに使われる差分画像は、別ファイル
-**`TEXTURE/pXXXX_jNN_face.bctex.lz`**に格納されている。
+The variant images used for blinking and lip-syncing during dialogue are
+stored in a separate file: **`TEXTURE/pXXXX_jNN_face.bctex.lz`**.
 
-## ファイルの中身
+## File contents
 
-`pXXXX_jNN_face.bctex.lz`はキャラ×職業の組み合わせごとに存在し、1ファイルにつき
-以下のテクスチャ(RGBA5551, 32x32)を持つ:
+`pXXXX_jNN_face.bctex.lz` exists for each character × job combination, and
+each file holds the following textures (RGBA5551, 32x32):
 
 ```
-pXXXX_jNN_m0 ... pXXXX_jNN_m7   (口パーツ、最大8枚。欠番がある場合あり)
-pXXXX_jNN_e0 ... pXXXX_jNN_e8   (目パーツ、最大9枚。欠番がある場合あり)
+pXXXX_jNN_m0 ... pXXXX_jNN_m7   (mouth parts, up to 8. some indices may be missing)
+pXXXX_jNN_e0 ... pXXXX_jNN_e8   (eye parts, up to 9. some indices may be missing)
 ```
 
-インデックス0(`m0`/`e0`)は`.bcmdl.lz`本体に埋め込まれているデフォルト表情と同一画像。
+Index 0 (`m0`/`e0`) is the same image as the default expression embedded
+in the `.bcmdl.lz` body.
 
-## フォーマット
+## Format
 
-`.bctex.lz`はCGFX(BCRES)のTexturesのみを持つ形式で、LZ11圧縮。CGFXの共通構造
-([`bcmdl_format.md`](bcmdl_format.md)参照)のTXOBチャンクと同じデコード手順で
-読める。
+`.bctex.lz` is a format holding only the Textures of a CGFX (BCRES),
+LZ11-compressed. It can be read with the same decoding procedure as the
+TXOB chunk of the common CGFX structure (see
+[`bcmdl_format.md`](bcmdl_format.md)).
 
-## 未解明
+## Unresolved
 
-- 各インデックス(m0-m7, e0-e8)がどの場面(通常瞬き・会話中口パク・特定の表情
-  イベント等)で使われるかの対応表はスクリプト側の表情変更系オペコードから
-  辿る必要があり、未調査。
-- 一部インデックスが欠番になっているキャラクターがあり、未使用領域か他用途への
-  転用かは未確認。
+- Which scene each index (m0-m7, e0-e8) is used in (normal blinking,
+  dialogue lip-sync, a specific expression event, etc.) needs to be
+  traced from the script-side expression-change opcodes, and has not been
+  investigated.
+- Some characters have missing indices; whether this is unused space or
+  repurposed for another use is unconfirmed.
