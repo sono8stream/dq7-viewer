@@ -241,38 +241,46 @@ TALKED_TO_OPCODE = 0x0000000f
 # "branch if KO'd" checks on the same character, not open/close brackets).
 IF_KO_STATUS_OPCODE = 0x00000070
 
-# 【確定 2026-10-03】戦闘開始コマンド。params=[encount_group_id]
-# （観測値: 501〜581, 970, 18920〜18971, 19065〜19170, 21011 等 - いずれも
-# `LEVELDATA/dq7_encount_data.dat`の通常エンカウントテーブルとは別の、
-# スクリプト専用の戦闘グループIDと見られる）。
-# exefs(`rom/exefs/code.decompressed.bin`)をr2(asm.bits=32)で解析して確定:
-# low16=0x1b(27)の下位16bitディスパッチャ(`script::CommandFunction`,
-# file offset 0x216610からの236エントリジャンプテーブル、index 0x1b →
-# VA 0x316aac)が呼ぶハンドラは、file offset 0x21b3c0
-# (`script::cmdEncountSetFlag`, VA 0x31b3c0)を直接呼び出す。この関数は:
-#   - `Encount::getSingleton`/`EncountData::setTileId`/`Encount::brew`
-#     (戦闘で出現するモンスターグループの設定)
-#   - `PlayerManager::getInstance`経由でプレイヤーの現在位置・向きを
-#     取得しEncount用構造体へコピー(戦闘後に同じ位置へ戻すためと見られる)
-#   - `MapChange::setBtlFloorId`(戦闘背景のフロアID設定)
-#   - `ScriptStatus::setScriptBattleResultFlag`(戦闘結果をIF_FLAGの
-#     type=2(非永続)空間の指定flag_idへ書き込む。このflag_idは、この
-#     コマンド自身の宣言パラメータではなく、**スクリプト上で直後に置かれた
-#     コマンドの生バイト列(opcode下位byteとparam[0])を読み出すことで
-#     得ている**——意図的な設計かは不明だが、実データでは直後に必ず
-#     `IF_FLAG(2, flag_id, 1)`が続き、戦闘後にその`flag_id`で勝敗分岐する
-#     定型パターンになっている)
-#   - 最終的に`PartUtility::startBattle`を呼んで実際の戦闘へ遷移する
-# を順に行う。全ROM横断スキャン(`rom/extracted/SCRIPT/*.bin`)で、この
-# コマンドが`IF_TALKED_TO`の子ブランチとして使われている例は0件
-# （話しかけて戦闘になるNPCは、この命令自体をIF_TALKED_TOで囲むのではなく、
-# 別オブジェクトの会話シーケンス側で`OBJECT_TOGGLE`等によりこの
-# scriptobjectを有効化し、有効化されたobjectの`execute`プロシージャの
-# 先頭(indent 0)でこのコマンドを無条件実行する、という間接的な構成を
-# 取っている——例: `SCRIPT/x09nboss.bin`のgroup5 obj7(param=501)と、
-# 同じgroup内のobj1(戦闘準備cmd opcode 0x00010056にも同じ501が登場)）。
-# 詳細は`docs/battle_start_opcode_investigation.md`参照。
-START_BATTLE_OPCODE = 0x0000001b
+# 【2026-10-03に「戦闘開始コマンド」と確定したが、2026-10-04に誤りと判明、
+# 訂正】当初このopcodeのハンドラが`script::cmdEncountSetFlag`
+# (file offset 0x21b3c0)を呼ぶと記録していたが、これは取り違いだった。
+# low16=0x1b(27)の下位16bitディスパッチャ(index 0x1b → VA 0x316aac、
+# file offset 0x216aac)を改めてr2で逆アセンブルし直すと、実際に呼んでいる
+# のはfile offset 0x21cc04(`script::cmdSetMapObjNumber`, VA 0x31cc04)
+# ——「マップ上のオブジェクト数設定」であり、戦闘とは無関係。
+# `script::cmdEncountSetFlag`(0x21b3c0)を実際に呼んでいるのは
+# opcode 0x24の方だった(`ENCOUNT_SET_FLAG_OPCODE`参照)。
+# 本opcode(0x1b)の実際の役割(`cmdSetMapObjNumber`が何をするか)は未調査。
+# 詳細な訂正の経緯は`docs/battle_start_opcode_investigation.md`
+# 「【重大な訂正】」節を参照。
+SET_MAP_OBJ_NUMBER_OPCODE = 0x0000001b
+
+# 【確定 2026-10-04】`script::cmdEncountSetFlag`(file offset 0x21b3c0,
+# VA 0x31b3c0)を呼ぶ本体。全ROM横断スキャンで136件発見、全て
+# params=[1, flag_id, type, value]という4パラメータ形式(params[0]は
+# 観測範囲内では常に1)。r2での完全な関数逆アセンブル(pdf)で各paramの
+# 使われ方を確認した:
+#   - params[0]: 関数内で一度も読まれていない(未使用、常に1)。
+#   - params[1](flag_id): 特殊分岐判定(==0x11d(285)なら全く別の処理、
+#     パーティ関連らしきグローバル構造体操作)に使われたあと、通常パスでは
+#     グローバルなエンカウント状態構造体(0x541184付近、複数フィールド)の
+#     flag_id系フィールドへ格納される。観測値は164〜268という狭い範囲に
+#     集中しており、固定サイズテーブルへのインデックスの可能性が高い。
+#   - params[2](type): バイトマスク(&0xff)されたうえで`fcn.00126140`
+#     (エンカウントレコードらしきものを操作する関数、引数:
+#     ベースアドレス0x541bec, type, value, 定数2, 定数9999(0x270f))の
+#     第2引数として渡される。観測値は0・1・2のみ。
+#   - params[3](value): fcn.00126140の第3引数(マスクなし)。観測値は
+#     5〜2091と幅広く、おそらく実際に使うモンスターグループID等の
+#     本体的な値だと推測される(これまでSTART_BATTLEの唯一の引数だと
+#     誤認していた値はおそらくこれに近い)。
+#   - この後、fcn.00126140呼び出しの直後に無条件(params由来ではない固定の
+#     r0=0xf, r1=0)でfcn.0012a870(推定PartUtility::startBattle)を呼んで
+#     いる。固定引数のため、「どの戦闘が始まるか」はこの呼び出し自体では
+#     なく、直前のfcn.00126140呼び出しで登録された内容がエンジン側で
+#     後から参照される、という間接的な構造になっている可能性が高い。
+# 詳細・今後の調査方針は`docs/battle_start_opcode_investigation.md`参照。
+ENCOUNT_SET_FLAG_OPCODE = 0x00000024
 
 # 【確定 2026-09-29、`script::cmdIsPartyMember`(file offset 0x219c44)の
 # r2逆アセンブルで確定】"is currently a living party member" branch
@@ -1540,9 +1548,16 @@ def _decode_command(raw: bytes) -> dict:
         out['name'] = 'IF_KO_STATUS'
         out['character_id'] = params[0]
         out['branch_when'] = 'ko' if params[1] != 0 else 'alive'
-    elif opcode == START_BATTLE_OPCODE and len(params) >= 1:
-        out['name'] = 'START_BATTLE'
-        out['encount_group_id'] = params[0]
+    elif (opcode & 0xFFFF) == SET_MAP_OBJ_NUMBER_OPCODE and len(params) >= 1:
+        # 【訂正 2026-10-04】以前はSTART_BATTLEとして表示していたが誤り
+        # だった(SET_MAP_OBJ_NUMBER_OPCODEのコメント参照)。本当の役割は
+        # 未調査のため、opcode名のみ付与しparamsはそのまま表示する。
+        out['name'] = 'SET_MAP_OBJ_NUMBER'
+    elif (opcode & 0xFFFF) == ENCOUNT_SET_FLAG_OPCODE and len(params) >= 4:
+        out['name'] = 'ENCOUNT_SET_FLAG'
+        out['flag_id'] = params[1]
+        out['enc_type'] = params[2]
+        out['value'] = params[3]
     elif opcode == IF_IS_PARTY_MEMBER_OPCODE and len(params) >= 1:
         out['name'] = 'IF_IS_PARTY_MEMBER'
         out['character_id'] = params[0]

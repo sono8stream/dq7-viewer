@@ -490,8 +490,8 @@ function renderTree(tree) {
             ? `if char=${c.character_id} is ${c.branch_when === 'ko' ? '戦闘不能' : '生存'}`
             : c.name === 'IF_IS_PARTY_MEMBER'
             ? `if char=${c.character_id} is in party`
-            : c.name === 'START_BATTLE'
-            ? `⚔️ START_BATTLE group=${c.encount_group_id}`
+            : c.name === 'ENCOUNT_SET_FLAG'
+            ? `⚔️ ENCOUNT_SET_FLAG flag=${c.flag_id} type=${c.enc_type} value=${c.value}`
             : c.name === 'ADD_PARTY_MEMBER'
             ? `ADD_PARTY_MEMBER char=${c.character_id}`
             : c.name === 'REMOVE_PARTY_MEMBER'
@@ -1078,22 +1078,18 @@ function showCommandDetail(c, o, p, ci) {
     lines.push(`  旧称"op_0000006f"。過去に「実行すると対象キャラの表示状態に副作用(消失)」と誤解されていたが、実際はIF_FLAGと同じ`);
     lines.push(`  if/elseifネスト深さの条件分岐オペコードであり、対応するネスト先コマンド無しに単独アクションとして誤挿入したことによる構造崩れが原因だった。`);
   }
-  if (c.name === 'START_BATTLE') {
-    lines.push(`START_BATTLE (確定 2026-10-03、script::cmdEncountSetFlag/file offset 0x21b3c0のr2解析で確定): encount_group_id=${c.encount_group_id}`);
-    lines.push(`  低16bitディスパッチャ(script::CommandFunction, index 0x1b)から直接呼ばれ、Encount::getSingleton/`);
-    lines.push(`  EncountData::setTileId/Encount::brewでencount_group_idの戦闘グループを設定した上でPartUtility::startBattleを`);
-    lines.push(`  呼び、実際に戦闘へ遷移する。MapChange::setBtlFloorIdで戦闘背景も設定する。`);
-    lines.push(`  戦闘結果はScriptStatus::setScriptBattleResultFlagによりIF_FLAGのtype=2(非永続)空間へ書き込まれるが、`);
-    lines.push(`  その書き込み先flag_idはこのコマンド自身のparamsではなく、スクリプト上で直後に置かれたコマンドの生バイト列`);
-    lines.push(`  (opcode下位byteとparam[0])を読んで得ている - 実データでは直後に必ずIF_FLAG(2, flag_id, 1)が続き、`);
-    lines.push(`  戦闘後にそのflag_idで勝敗分岐する定型パターンになっている。`);
-    lines.push(`  全ROM走査でIF_TALKED_TOの子ブランチ(他のいかなる分岐の子)として使われている例は0件 - 実例は全て`);
-    lines.push(`  各プロシージャのトップレベル(indent 0)に無条件で置かれている。【実機検証済み2026-10-04】`);
-    lines.push(`  IF_TALKED_TOの直下(indent1)に直接置いたところ、話しかけても一切反応が無かった(メッセージも戦闘も`);
-    lines.push(`  発生しない) - ROM中に前例の無い組み合わせだったことと符合する。話しかけて戦闘になるNPCは、`);
-    lines.push(`  このコマンド自体をIF_TALKED_TOで囲むのではなく、別の見える側のNPCのIF_TALKED_TO分岐からOBJECT_TOGGLEで`);
-    lines.push(`  このscriptobjectを有効化し、有効化後のそのobject自身がトップレベル(indent 0)で無条件実行する、という`);
-    lines.push(`  2オブジェクトの間接構成を取る。`);
+  if (c.name === 'SET_MAP_OBJ_NUMBER') {
+    lines.push(`SET_MAP_OBJ_NUMBER (訂正 2026-10-04): 以前はSTART_BATTLE(script::cmdEncountSetFlagを呼ぶ)と誤って記録していたが、`);
+    lines.push(`  実際のハンドラ呼び先はscript::cmdSetMapObjNumber(file offset 0x21cc04)で、戦闘とは無関係と見られる。`);
+    lines.push(`  本当の役割は未調査。詳細: docs/battle_start_opcode_investigation.md「【重大な訂正】」節`);
+  }
+  if (c.name === 'ENCOUNT_SET_FLAG') {
+    lines.push(`ENCOUNT_SET_FLAG (確定 2026-10-04、script::cmdEncountSetFlag/file offset 0x21b3c0のr2解析で確定): flag_id=${c.flag_id} type=${c.enc_type} value=${c.value}`);
+    lines.push(`  以前はopcode 0x1bがこの関数を呼ぶと誤って記録していたが、実際に呼んでいるのはopcode 0x24(このコマンド)だった。`);
+    lines.push(`  params=[1(未使用), flag_id, type, value]。flag_id(観測値164〜268)はエンカウント状態構造体のフィールドに`);
+    lines.push(`  格納され、type(0/1/2)とvalue(観測値5〜2091、おそらくモンスターグループID相当)はfcn.00126140`);
+    lines.push(`  (エンカウントレコード操作関数)へ渡される。その直後に無条件(固定引数r0=0xf,r1=0)でPartUtility::startBattle`);
+    lines.push(`  相当の関数を呼ぶが、引数が固定なため「どの戦闘が始まるか」はfcn.00126140側の登録内容に依存すると見られる。`);
     lines.push(`  詳細: docs/battle_start_opcode_investigation.md`);
   }
   if (c.name === 'ADD_PARTY_MEMBER') {
@@ -1322,7 +1318,8 @@ const _KNOWN_PARAM_TYPES = {
   '0x0000000f': { prefix: ['u32'], rest: 'u32' },                 // IF_TALKED_TO (確定、2026-08-28)
   '0x00000070': { prefix: ['u32', 'u32'], rest: 'u32' },          // IF_KO_STATUS (確定、2026-09-29): [character_id, mode(1=戦闘不能で分岐/0=生存で分岐)]
   '0x0000006f': { prefix: ['u32'], rest: 'u32' },                 // IF_IS_PARTY_MEMBER (確定、2026-09-29): [character_id]
-  '0x0000001b': { prefix: ['u32'], rest: 'u32' },                 // START_BATTLE (確定、2026-10-03): [encount_group_id]
+  '0x0000001b': { prefix: ['u32'], rest: 'u32' },                 // SET_MAP_OBJ_NUMBER (訂正、2026-10-04: START_BATTLEではなかった、意味未調査)
+  '0x00000024': { prefix: ['u32', 'u32', 'u32', 'u32'], rest: 'u32' },  // ENCOUNT_SET_FLAG (確定、2026-10-04): [1, flag_id, type, value]
 };
 // mirrors server.py's _MESSAGE_OPCODE_LO (MSG-family opcodes matched by
 // low byte, not exact value) - [msgID, count, ...] shape, both u32.
