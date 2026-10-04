@@ -1090,6 +1090,8 @@ function showCommandDetail(c, o, p, ci) {
     lines.push(`  格納され、type(0/1/2)とvalue(観測値5〜2091、おそらくモンスターグループID相当)はfcn.00126140`);
     lines.push(`  (エンカウントレコード操作関数)へ渡される。その直後に無条件(固定引数r0=0xf,r1=0)でPartUtility::startBattle`);
     lines.push(`  相当の関数を呼ぶが、引数が固定なため「どの戦闘が始まるか」はfcn.00126140側の登録内容に依存すると見られる。`);
+    lines.push(`  【実機検証済み2026-10-05】IF_TALKED_TO等を介さずこのコマンド単体をinitializeに無条件で置いたところ、`);
+    lines.push(`  実機でマップ読み込み直後に実際に戦闘が開始することを確認した。`);
     lines.push(`  詳細: docs/battle_start_opcode_investigation.md`);
   }
   if (c.name === 'ADD_PARTY_MEMBER') {
