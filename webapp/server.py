@@ -3093,7 +3093,26 @@ _REPACK_TITLE_ID_MARKER = '0004000000065E00'  # DQ7's 3DS title ID, used to
 _REPACK_OUTPUT = os.path.join(_ROM_DIR, 'webapp_repack_output.cia')
 _DOWNLOADS_DIR = os.path.expanduser('~/storage/downloads/dq7')
 _DOWNLOADS_TARGET = os.path.join(_DOWNLOADS_DIR, 'game_test.cia')
-_CIA_REPACK_SCRIPT = os.path.join(_ROOT, 'cia_repack.py')
+# 【確定 2026-10-04】cia_repack.py自体はこのリポジトリに同梱されていない
+# (公開物ではなくROM/CIAを扱うビルドツールのため)。このビューアを、
+# DQ7_ROM_DIRで実際のROMデータを指す別のチェックアウトから起動している
+# 場合、cia_repack.pyはこのビューアのルート(_ROOT)ではなく、そのROMデータ
+# が置かれているリポジトリの直下にある。_ROOTに見つからない場合は
+# DQ7_ROM_DIRの親ディレクトリも探す(見つからなければ元の_ROOT基準の
+# パスのままにしておき、エラーメッセージで気づけるようにする)。
+def _resolve_cia_repack_script() -> str:
+    candidate = os.path.join(_ROOT, 'cia_repack.py')
+    if os.path.isfile(candidate):
+        return candidate
+    rom_dir_env = os.environ.get('DQ7_ROM_DIR')
+    if rom_dir_env:
+        alt = os.path.join(os.path.dirname(os.path.abspath(rom_dir_env)), 'cia_repack.py')
+        if os.path.isfile(alt):
+            return alt
+    return candidate
+
+
+_CIA_REPACK_SCRIPT = _resolve_cia_repack_script()
 
 
 def _find_original_cia() -> str:
