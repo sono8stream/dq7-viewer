@@ -1020,6 +1020,10 @@ function showCommandDetail(c, o, p, ci) {
   lines.push(`opcode: ${c.opcode || ''}   name: ${c.name || ''}`);
   if (c.params) lines.push(`params: [${c.params.join(', ')}]`);
   if (c.msgid !== undefined) lines.push(`msgID: ${c.msgid}   count: ${c.count}`);
+  if (c.count_suspicious) {
+    lines.push(`⚠ countの値が不自然に大きい（ページ数ではなく別の意味のパラメータの可能性）ため、`);
+    lines.push(`  テキスト解決をスキップしています（確定 2026-10-04、全ROM走査で809件発見）。`);
+  }
   if (c.style !== undefined) lines.push(`style: ${c.style}`);
   if (c.name === 'MSG' && c.turn_to_player !== undefined) {
     lines.push(`turn_to_player: ${c.turn_to_player} (確定 2026-08-28: opcode下位byte 0x09=プレイヤーの方を向く / 0x07=向かない。`);

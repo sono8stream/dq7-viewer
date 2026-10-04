@@ -1613,13 +1613,33 @@ def _decode_command(raw: bytes) -> dict:
         opcode_hi16 = (opcode >> 16) & 0xFFFF
         if opcode_hi16 in _MSG_REPEAT_MODE_HI16:
             out['repeat_mode'] = _MSG_REPEAT_MODE_HI16[opcode_hi16]
-        text_parts = []
-        for i in range(max(1, params[1])):
-            t = resolve_message(params[0] + i)
-            if t:
-                text_parts.append(t)
-        if text_parts:
-            out['text'] = ''.join(text_parts)
+        # 【確定 2026-10-04】params[1]を無条件に「ページ数」として
+        # resolve_message(msgid+i)をその回数だけ呼ぶ実装だったが、全ROM走査
+        # したところ、低8bit=0x0a/0x0b/0x0d/0x0e等の一部コマンドでは
+        # params[1]が実際には小さいページ数ではなく「別の(近い)msgid」と
+        # 見られる値（例: msgid=4372に対してparams[1]=4373、
+        # msgid=25213に対してparams[1]=25215等）になっているケースが
+        # 809件見つかった。これを「ページ数」として扱うと
+        # resolve_message()を数万〜85万回呼び、1コマンドで数十万文字の
+        # テキストを連結してしまい、該当ファイルの`/api/parse`が数秒〜に
+        # 悪化する原因になっていた（`m05nout.bin`で実測）。
+        # 実際に確認できている正規の複数ページ表示(0x00030009等)は
+        # count=1〜8程度に収まっており、不自然に大きい値は「ページ数」
+        # ではない何か別の意味を持つパラメータだと考えられる(詳細未確定)。
+        # 安全策として、明らかに非現実的な大きさの場合はテキスト解決
+        # 自体を行わない(countの生値はそのまま出力し、閲覧は妨げない)。
+        _MSG_PAGE_COUNT_SANITY_MAX = 20
+        count = params[1]
+        if 0 <= count <= _MSG_PAGE_COUNT_SANITY_MAX:
+            text_parts = []
+            for i in range(max(1, count)):
+                t = resolve_message(params[0] + i)
+                if t:
+                    text_parts.append(t)
+            if text_parts:
+                out['text'] = ''.join(text_parts)
+        else:
+            out['count_suspicious'] = True
     else:
         out['name'] = f'op_{opcode:08x}'
 
