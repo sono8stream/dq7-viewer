@@ -2187,11 +2187,22 @@ def search_message_text(query: str, limit: int = 300) -> dict:
                 elif opcode == CHOICE_MENU_OPCODE and len(params) >= 1 and params[0] in matched_ids:
                     hit_msgid = params[0]
                 elif (opcode & 0xFF) in _MESSAGE_OPCODE_LO and len(params) >= 2:
-                    count = max(1, params[1])
-                    for i in range(count):
-                        if params[0] + i in matched_ids:
-                            hit_msgid = params[0] + i
-                            break
+                    # 【確定 2026-10-04】params[1]を無条件に「ページ数」として
+                    # params[0]..params[0]+count-1の範囲を全部matched_idsと
+                    # 突き合わせていたが、_decode_command()側で見つかった
+                    # 同じ不具合(809件、countが実際には別の意味のパラメータで
+                    # 数万〜数十万になっている)がここにも存在し、無関係に
+                    # ヒットした巨大範囲の中に偶然検索語を含む別のmsgidが
+                    # 含まれると、「検索結果の場所に実際に飛んでみても
+                    # 検索語が見当たらない」という食い違いの原因になっていた
+                    # （`docs/viewer_msg_count_param_perf_bug.md`参照）。
+                    # 同じ安全装置(count<=20)をここにも適用する。
+                    count = params[1]
+                    if 0 <= count <= 20:
+                        for i in range(max(1, count)):
+                            if params[0] + i in matched_ids:
+                                hit_msgid = params[0] + i
+                                break
                 if hit_msgid is None:
                     continue
                 results.append({
