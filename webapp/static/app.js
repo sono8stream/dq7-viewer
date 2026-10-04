@@ -1302,6 +1302,8 @@ function encodeParamValue(value, type) {
 // module; update both places together when a new opcode is confirmed.
 const _KNOWN_PARAM_TYPES = {
   '0x00000003': { prefix: ['u32', 'u32', 'u32'], rest: 'u32' },  // IF_FLAG
+  '0x00010004': { prefix: ['u32', 'u32', 'u32'], rest: 'u32' },  // SET_FLAG (分岐途中)
+  '0x00030004': { prefix: ['u32', 'u32', 'u32'], rest: 'u32' },  // SET_FLAG (分岐終了マーカー、high16=0x0003)
   '0x00010022': { prefix: ['u32'], rest: 'u32' },                 // ADD_PARTY_MEMBER
   '0x00010023': { prefix: ['u32'], rest: 'u32' },                 // ADD_PARTY_MEMBER
   '0x00010064': { prefix: ['u32'], rest: 'u32' },                 // PARTY_SLOT_ACTIVATE

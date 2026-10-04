@@ -1524,7 +1524,11 @@ def _decode_command(raw: bytes) -> dict:
         out['flag_type'] = params[0]
         out['flag_id'] = params[1]
         out['flag_value'] = params[2]
-    elif opcode == SET_FLAG_OPCODE and len(params) >= 3:
+    elif (opcode & 0xFFFF) == (SET_FLAG_OPCODE & 0xFFFF) and len(params) >= 3:
+        # 【確定 2026-10-04】以前はSET_FLAG_OPCODE(0x00010004)との完全一致でしか
+        # 認識しておらず、high16=0x0003版(分岐ブロック終了マーカー、script_opcodes.md
+        # で既に確定済みのはずの定型パターン)が`op_00030004`としてしか表示されて
+        # いなかった(OBJECT_TOGGLEで見つかったのと同種のデコード漏れ)。
         out['name'] = 'SET_FLAG'
         out['flag_type'] = params[0]
         out['flag_id'] = params[1]
