@@ -943,6 +943,130 @@ def parse_item_list() -> dict:
     return _item_list_cache
 
 
+# --- 特技/呪文パラメータ (dq7_action_param.dat / dq7_action_type.dat) ビュア ----
+# 構造の根拠は docs/action_param_action_type_investigation.md。
+# record index(0..247) = TEXT/ACTION_NAME.txt の id とそのまま一致することを
+# 既知のMP消費量(ホイミ=2, ベホマ=6, ベホマズン=20 等)で確認済み。248以降は
+# 名前を持たないモンスター専用技と推測(未確認)。
+
+_action_param_cache = None
+_action_type_cache = None
+
+# +0x4a の下位byte(=element_id)。炎/光/爆発/氷/風/雷のファミリー内で
+# MP消費量が段階的に増える並び(メラ2→メラミ4→メラゾーマ10 等)から逆算した
+# 推定ラベル。22は補助/回復系呪文で頻出する「無属性」固定値。確証は無い。
+_ACTION_ELEMENT_LABEL = {
+    0: 'メラ系(炎)', 1: 'ギラ系(光)', 2: 'イオ系(爆発)', 3: 'ヒャド系(氷)',
+    4: 'バギ系(風)', 5: 'デイン系(雷)', 6: 'ザキ系(即死)', 8: 'バシルーラ系(強制排除)',
+    22: '無属性(補助/回復)',
+}
+_ACTION_ELEMENT_LABEL_EN = {
+    0: 'Mera family (fire)', 1: 'Gira family (light)', 2: 'Io family (explosion)',
+    3: 'Hyado family (ice)', 4: 'Bagi family (wind)', 5: 'Dein family (thunder)',
+    6: 'Zaki family (instant death)', 8: 'Basirura family (banish)',
+    22: 'Non-elemental (support/heal)',
+}
+
+
+def parse_action_param() -> dict:
+    """LEVELDATA/dq7_action_param.dat (804 x 92) を解読して返す。"""
+    global _action_param_cache
+    if _action_param_cache is not None:
+        return _action_param_cache
+    path = os.path.join(_LEVELDATA_DIR, 'dq7_action_param.dat')
+    data = open(path, 'rb').read()
+    nrec, rsize, nrec2 = struct.unpack_from('<3i', data, 4)
+    anames = _load_name_csv('ACTION_NAME.txt')
+
+    records = []
+    for i in range(nrec):
+        r = data[16 + i * rsize:16 + (i + 1) * rsize]
+        type_byte = r[0]
+        elem_id = r[0x4a]
+        mp_cost = r[0x4b]
+        single_min, single_max, group_min, group_max = struct.unpack_from('<4H', r, 0x38)
+        records.append({
+            'index': i,
+            'name': anames.get(i, ''),
+            'type_byte': type_byte,                    # +0x00
+            'type_category': type_byte >> 3,            # 推定: 上位5bit
+            'type_sub': type_byte & 7,                  # 推定: 下位3bit
+            'single_min': single_min,                   # +0x38 単体対象 最小値
+            'single_max': single_max,                   # +0x3a 単体対象 最大値
+            'group_min': group_min,                     # +0x3c 全体/複数対象 最小値
+            'group_max': group_max,                     # +0x3e 全体/複数対象 最大値
+            'element_id': elem_id,                       # +0x4a
+            'element_label': _ACTION_ELEMENT_LABEL.get(elem_id, f'? ({elem_id})'),
+            'element_label_en': _ACTION_ELEMENT_LABEL_EN.get(elem_id, f'? ({elem_id})'),
+            'mp_cost': mp_cost,                          # +0x4b (255 = メガザルの"MP全消費")
+            'raw_hex': r.hex(),
+        })
+    _action_param_cache = {
+        'source': 'LEVELDATA/dq7_action_param.dat',
+        'record_size': rsize,
+        'record_count': nrec,
+        'header_ok': nrec == nrec2,
+        'field_doc': 'docs/action_param_action_type_investigation.md',
+        'note': 'single/group の大小関係・element_id・type_byte の分類名は'
+                'MP消費量など既知の数値からの逆算による推定で、ExeFS側の'
+                '参照コードまでは追えていない(詳細はdocs参照)。'
+                'record index 248以降は ACTION_NAME.txt に名前が無い'
+                '(モンスター専用技と推測、未確認)。',
+        'records': records,
+    }
+    return _action_param_cache
+
+
+def parse_action_type() -> dict:
+    """LEVELDATA/dq7_action_type.dat (100 x 32) を解読して返す。
+
+    戦闘エフェクト(モデルスケール・アタッチ位置・パーティクル名)のテーブルと
+    推測されるが、dq7_action_param.dat とどのキーで紐付くかは未確認。
+    """
+    global _action_type_cache
+    if _action_type_cache is not None:
+        return _action_type_cache
+    path = os.path.join(_LEVELDATA_DIR, 'dq7_action_type.dat')
+    data = open(path, 'rb').read()
+    nrec, rsize, nrec2 = struct.unpack_from('<3i', data, 4)
+
+    records = []
+    for i in range(nrec):
+        r = data[16 + i * rsize:16 + (i + 1) * rsize]
+        key, marker = struct.unpack_from('<HH', r, 0)
+        scale = struct.unpack_from('<f', r, 4)[0]
+        fa, fb, fc, fd = struct.unpack_from('<4H', r, 8)
+        node_id = struct.unpack_from('<H', r, 18)[0]
+        name = r[0x16:0x1c].split(b'\x00')[0].decode('ascii', 'replace')
+        flags = struct.unpack_from('<H', r, 30)[0]
+        records.append({
+            'index': i,
+            'key': key,                # +0x00 用途未確認(増分パターンあり)
+            'marker': marker,          # +0x02 通常 0xFFFF (record0のみ0)
+            'scale': scale,            # +0x04 float。1.0 または 0.5 が大半
+            'field_a': fa,             # +0x08
+            'field_b': fb,             # +0x0a
+            'field_c': fc,             # +0x0c
+            'field_d': fd,             # +0x0e
+            'node_id': node_id,        # +0x12 アタッチ先ボーン/ノードID?(11/12等)
+            'particle_name': name,     # +0x16 "null"/"null_b"/"null_c"/空
+            'flags': flags,            # +0x1e ビットフラグ(未解読)
+            'raw_hex': r.hex(),
+        })
+    _action_type_cache = {
+        'source': 'LEVELDATA/dq7_action_type.dat',
+        'record_size': rsize,
+        'record_count': nrec,
+        'header_ok': nrec == nrec2,
+        'field_doc': 'docs/action_param_action_type_investigation.md',
+        'note': '戦闘エフェクト(モデルスケール/アタッチ位置/パーティクル名)の'
+                'テーブルと推測。dq7_action_param.dat側のどのフィールドで'
+                '本テーブルの行を参照しているかは未確認。',
+        'records': records,
+    }
+    return _action_type_cache
+
+
 # --- キャラクターのステータス成長表 (dq7_player_levelN.dat) ビュア -------------
 # 6ファイル(N=1..6) x 100レコード x 40byte。レコード index = レベル(0=ダミー, 1..99)。
 # レコード構造(解読 2026-09-09):
@@ -3457,6 +3581,20 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if parsed.path == '/api/item_list':
             try:
                 self._send_json(parse_item_list())
+            except Exception as e:
+                self._send_json({'error': str(e)}, status=500)
+            return
+
+        if parsed.path == '/api/action_param':
+            try:
+                self._send_json(parse_action_param())
+            except Exception as e:
+                self._send_json({'error': str(e)}, status=500)
+            return
+
+        if parsed.path == '/api/action_type':
+            try:
+                self._send_json(parse_action_type())
             except Exception as e:
                 self._send_json({'error': str(e)}, status=500)
             return
