@@ -24,10 +24,13 @@ DQ7I18N.extend({
     'action.fMpCostHint': '255 = MP全消費(例: メガザル)',
     'action.fElement': '属性/系統',
     'action.fElementHint': '同系統スペル内でMP消費量が段階的に増える並びから逆算した推定ラベル',
-    'action.fSingle': '単体対象(single)',
-    'action.fSingleHint': '敵1体に絞って使った場合の威力/回復量 範囲 (推定)',
-    'action.fGroup': '複数/全体対象(group)',
-    'action.fGroupHint': '複数の敵/味方全体に使った場合の威力/回復量 範囲 (推定)。全回復呪文は12000=フルHPのセンチネル値',
+    'action.fRoll': '基本威力/回復量ロール',
+    'action.fRollHint': '[min,max]の一様乱数。ActionEffectValue::setEffectValueのデコンパイルで' +
+      '実際にこのフィールドが読まれることを確認済み(2026-10-06)',
+    'action.fUnknown3c': '用途不明 (+0x3c/+0x3e)',
+    'action.fUnknown3cHint': '左のロールより常に小さいか等しい値だが、ダメージ計算関連の' +
+      '関数を約25個調べても読み込み箇所が見つからず未確認。旧版では「複数/全体対象威力」と' +
+      '説明していたが根拠が無かったため撤回した',
     'action.rawHeading': 'raw (92 byte)',
     'action.basedOn': '根拠',
     'action.typeIntro': 'dq7_action_type.dat (100レコード x 32byte)。戦闘エフェクト' +
@@ -57,10 +60,14 @@ DQ7I18N.extend({
     'action.fMpCostHint': '255 = consumes all remaining MP (e.g. Omniheal/Megazal)',
     'action.fElement': 'Element/family',
     'action.fElementHint': 'Estimated label, derived from the stepped MP cost within each spell family',
-    'action.fSingle': 'Single target',
-    'action.fSingleHint': 'Power/heal range (estimated) when narrowed to one enemy/ally',
-    'action.fGroup': 'Group/all target',
-    'action.fGroupHint': 'Power/heal range (estimated) when used on multiple enemies/the whole party. 12000 = full-HP sentinel for full-heal spells',
+    'action.fRoll': 'Base power/heal roll',
+    'action.fRollHint': 'Uniform random [min,max]. Confirmed by decompiling ' +
+      'ActionEffectValue::setEffectValue, which reads exactly this field (2026-10-06)',
+    'action.fUnknown3c': 'Unknown purpose (+0x3c/+0x3e)',
+    'action.fUnknown3cHint': 'Always <= the roll on the left, but no read of this field ' +
+      'turned up after decompiling ~25 damage-calculation-related functions. An earlier ' +
+      'version of this viewer called it "group/all-target power" with no real evidence, ' +
+      'and that claim has been retracted',
     'action.rawHeading': 'raw (92 bytes)',
     'action.basedOn': 'Based on',
     'action.typeIntro': 'dq7_action_type.dat (100 records x 32 bytes). Believed to be a battle ' +
@@ -160,8 +167,8 @@ function selectAction(idx) {
   h += `<div class="sec">#${a.index}  ${esc(a.name || DQ7I18N.t('action.noName'))}</div>`;
   h += `<table class="kv2"><tr><th>${DQ7I18N.t('common.offset')}</th><th>${DQ7I18N.t('common.field')}</th><th>${DQ7I18N.t('common.value')}</th><th></th></tr>`;
   h += row('+0x00', 'type_byte', `${a.type_byte} (cat=${a.type_category}, sub=${a.type_sub})`, DQ7I18N.t('action.fTypeByteHint'));
-  h += row('+0x38/0x3a', DQ7I18N.t('action.fSingle'), `${a.single_min} - ${a.single_max}`, DQ7I18N.t('action.fSingleHint'));
-  h += row('+0x3c/0x3e', DQ7I18N.t('action.fGroup'), `${a.group_min} - ${a.group_max}`, DQ7I18N.t('action.fGroupHint'));
+  h += row('+0x38/0x3a', DQ7I18N.t('action.fRoll'), `${a.roll_min} - ${a.roll_max}`, DQ7I18N.t('action.fRollHint'));
+  h += row('+0x3c/0x3e', DQ7I18N.t('action.fUnknown3c'), `${a.unknown3c_min} - ${a.unknown3c_max}`, DQ7I18N.t('action.fUnknown3cHint'));
   h += row('+0x4a', DQ7I18N.t('action.fElement'), `${a.element_id} = ${elabel(a)}`, DQ7I18N.t('action.fElementHint'));
   h += row('+0x4b', DQ7I18N.t('action.fMpCost'), a.mp_cost, DQ7I18N.t('action.fMpCostHint'));
   h += `</table>`;

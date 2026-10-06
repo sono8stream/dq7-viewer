@@ -984,17 +984,28 @@ def parse_action_param() -> dict:
         type_byte = r[0]
         elem_id = r[0x4a]
         mp_cost = r[0x4b]
-        single_min, single_max, group_min, group_max = struct.unpack_from('<4H', r, 0x38)
+        # +0x34/+0x36: ExeFS(ActionEffectValue::setEffectValueBasic等)には読み込み
+        # コードがあるが、804レコード全件で常にゼロ(死にフィールド)と確認済み。
+        unused_min, unused_max = struct.unpack_from('<2H', r, 0x34)
+        # +0x38/+0x3a: ActionEffectValue::setEffectValue で実際に [min,max] の一様乱数
+        # ロールとして読まれることをデコンパイルで確認済み(2026-10-06)。
+        roll_min, roll_max = struct.unpack_from('<2H', r, 0x38)
+        # +0x3c/+0x3e: pairA(+0x38)より常に小さいか等しいという観察はあるが、ダメージ
+        # 計算関連の関数を約25個デコンパイルしても読み込み箇所が見つからず、用途不明
+        # (旧ドキュメントの「複数/全体対象威力」という説明は撤回済み)。
+        unknown3c_min, unknown3c_max = struct.unpack_from('<2H', r, 0x3c)
         records.append({
             'index': i,
             'name': anames.get(i, ''),
             'type_byte': type_byte,                    # +0x00
             'type_category': type_byte >> 3,            # 推定: 上位5bit
             'type_sub': type_byte & 7,                  # 推定: 下位3bit
-            'single_min': single_min,                   # +0x38 単体対象 最小値
-            'single_max': single_max,                   # +0x3a 単体対象 最大値
-            'group_min': group_min,                     # +0x3c 全体/複数対象 最小値
-            'group_max': group_max,                     # +0x3e 全体/複数対象 最大値
+            'unused_min': unused_min,                   # +0x34 コード上は存在するが常に0
+            'unused_max': unused_max,                   # +0x36 同上
+            'roll_min': roll_min,                       # +0x38 基本威力/回復量ロール 最小値(確認済み)
+            'roll_max': roll_max,                       # +0x3a 同 最大値(確認済み)
+            'unknown3c_min': unknown3c_min,             # +0x3c 用途不明(未確認)
+            'unknown3c_max': unknown3c_max,             # +0x3e 用途不明(未確認)
             'element_id': elem_id,                       # +0x4a
             'element_label': _ACTION_ELEMENT_LABEL.get(elem_id, f'? ({elem_id})'),
             'element_label_en': _ACTION_ELEMENT_LABEL_EN.get(elem_id, f'? ({elem_id})'),
@@ -1007,9 +1018,11 @@ def parse_action_param() -> dict:
         'record_count': nrec,
         'header_ok': nrec == nrec2,
         'field_doc': 'docs/action_param_action_type_investigation.md',
-        'note': 'single/group の大小関係・element_id・type_byte の分類名は'
-                'MP消費量など既知の数値からの逆算による推定で、ExeFS側の'
-                '参照コードまでは追えていない(詳細はdocs参照)。'
+        'note': '+0x38/+0x3aの基本威力ロールはExeFS(ActionEffectValue::setEffectValue等)'
+                'のデコンパイルで確認済み(2026-10-06)。element_id/type_byteの分類名は'
+                'MP消費量など既知の数値からの逆算による推定。+0x3c/+0x3eの用途、および'
+                'かえん斬り等の物理わざ固有倍率がExeFS側のどこにハードコードされて'
+                'いるかは未確認(詳細はdocs参照)。'
                 'record index 248以降は ACTION_NAME.txt に名前が無い'
                 '(モンスター専用技と推測、未確認)。',
         'records': records,
