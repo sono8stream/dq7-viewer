@@ -22,6 +22,10 @@ DQ7I18N.extend({
     'action.fTypeByteHint': '上位5bit=category(推定), 下位3bit=sub(推定)。action_type.datの行番号ではない模様',
     'action.fMpCost': 'MP消費',
     'action.fMpCostHint': '255 = MP全消費(例: メガザル)',
+    'action.fBonusGate': 'ボーナス発動ゲート',
+    'action.fBonusGateHint': 'bit0=属性/種族ボーナス対象, bit1=両手持ち等補正対象, ' +
+      'bit4=ATKフォールバック対象(いずれも2026-10-06デコンパイルで確認)。かえん斬り等の' +
+      '元素/種族斬り技は全てこの値が0で、どのゲートも発動していないことを確認済み',
     'action.fElement': '属性/系統',
     'action.fElementHint': '同系統スペル内でMP消費量が段階的に増える並びから逆算した推定ラベル',
     'action.fRoll': '基本威力/回復量ロール',
@@ -58,6 +62,11 @@ DQ7I18N.extend({
     'action.fTypeByteHint': 'Upper 5 bits = category (estimated), lower 3 bits = sub (estimated). Does not appear to index dq7_action_type.dat rows',
     'action.fMpCost': 'MP cost',
     'action.fMpCostHint': '255 = consumes all remaining MP (e.g. Omniheal/Megazal)',
+    'action.fBonusGate': 'Bonus-eligibility gate',
+    'action.fBonusGateHint': 'bit0 = eligible for element/race bonus, bit1 = eligible for ' +
+      'two-handed-weapon-style correction, bit4 = eligible for the ATK fallback formula ' +
+      '(all confirmed by decompiling on 2026-10-06). Elemental/race "slash" techniques like ' +
+      'Frizz Slash all have this at 0 - none of these gates actually fire for them',
     'action.fElement': 'Element/family',
     'action.fElementHint': 'Estimated label, derived from the stepped MP cost within each spell family',
     'action.fRoll': 'Base power/heal roll',
@@ -104,6 +113,12 @@ mobileTabs.querySelectorAll('button').forEach(b => {
 
 function esc(s) {
   return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+function bits(v) {
+  const set = [];
+  for (let b = 7; b >= 0; b--) if (v & (1 << b)) set.push('bit' + b);
+  return `0x${v.toString(16).padStart(2, '0')} (${v})` + (set.length ? '  [' + set.join(' ') + ']' : '');
 }
 
 function elabel(a) {
@@ -171,6 +186,7 @@ function selectAction(idx) {
   h += row('+0x3c/0x3e', DQ7I18N.t('action.fUnknown3c'), `${a.unknown3c_min} - ${a.unknown3c_max}`, DQ7I18N.t('action.fUnknown3cHint'));
   h += row('+0x4a', DQ7I18N.t('action.fElement'), `${a.element_id} = ${elabel(a)}`, DQ7I18N.t('action.fElementHint'));
   h += row('+0x4b', DQ7I18N.t('action.fMpCost'), a.mp_cost, DQ7I18N.t('action.fMpCostHint'));
+  h += row('+0x52', DQ7I18N.t('action.fBonusGate'), bits(a.bonus_gate_flags), DQ7I18N.t('action.fBonusGateHint'));
   h += `</table>`;
 
   h += `<div class="sec">${DQ7I18N.t('action.rawHeading')}</div><div class="mono">${a.raw_hex.replace(/(..)/g, '$1 ').trim()}</div>`;

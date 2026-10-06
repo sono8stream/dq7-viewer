@@ -994,6 +994,11 @@ def parse_action_param() -> dict:
         # 計算関連の関数を約25個デコンパイルしても読み込み箇所が見つからず、用途不明
         # (旧ドキュメントの「複数/全体対象威力」という説明は撤回済み)。
         unknown3c_min, unknown3c_max = struct.unpack_from('<2H', r, 0x3c)
+        # +0x52: ボーナス発動ゲートのビットフラグ(2026-10-06デコンパイルで確認)。
+        # bit0=属性/種族ボーナス対象, bit1=両手持ち等の補正対象, bit4=ATKフォール
+        # バック対象。かえん斬り等の元素/種族斬り技は全てこの値が0で、ゲートが
+        # どれも成立しないことを確認した(docs参照)。
+        bonus_gate_flags = r[0x52]
         records.append({
             'index': i,
             'name': anames.get(i, ''),
@@ -1010,6 +1015,7 @@ def parse_action_param() -> dict:
             'element_label': _ACTION_ELEMENT_LABEL.get(elem_id, f'? ({elem_id})'),
             'element_label_en': _ACTION_ELEMENT_LABEL_EN.get(elem_id, f'? ({elem_id})'),
             'mp_cost': mp_cost,                          # +0x4b (255 = メガザルの"MP全消費")
+            'bonus_gate_flags': bonus_gate_flags,        # +0x52 ボーナス発動ゲート(確認済み、詳細はdocs)
             'raw_hex': r.hex(),
         })
     _action_param_cache = {
