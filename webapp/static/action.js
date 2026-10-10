@@ -22,19 +22,24 @@ DQ7I18N.extend({
     'action.fTypeByteHint': '上位5bit=category(推定), 下位3bit=sub(推定)。action_type.datの行番号ではない模様',
     'action.fMpCost': 'MP消費',
     'action.fMpCostHint': '255 = MP全消費(例: メガザル)',
-    'action.fBonusGate': 'ボーナス発動ゲート',
-    'action.fBonusGateHint': 'bit0=属性/種族ボーナス対象, bit1=両手持ち等補正対象, ' +
-      'bit4=ATKフォールバック対象(いずれも2026-10-06デコンパイルで確認)。かえん斬り等の' +
-      '元素/種族斬り技は全てこの値が0で、どのゲートも発動していないことを確認済み',
-    'action.fElement': '属性/系統',
-    'action.fElementHint': '同系統スペル内でMP消費量が段階的に増える並びから逆算した推定ラベル',
-    'action.fRoll': '基本威力/回復量ロール',
-    'action.fRollHint': '[min,max]の一様乱数。ActionEffectValue::setEffectValueのデコンパイルで' +
-      '実際にこのフィールドが読まれることを確認済み(2026-10-06)',
-    'action.fUnknown3c': '用途不明 (+0x3c/+0x3e)',
-    'action.fUnknown3cHint': '左のロールより常に小さいか等しい値だが、ダメージ計算関連の' +
-      '関数を約25個調べても読み込み箇所が見つからず未確認。旧版では「複数/全体対象威力」と' +
-      '説明していたが根拠が無かったため撤回した',
+    'action.fGate': 'ゲートフラグ',
+    'action.fGateHint': 'bit0=複数対象逓減(getMuchiDamage)の対象, bit4=2回攻撃装備時の' +
+      '再計算(status::isDoubleAction)の対象。デコンパイルで確認',
+    'action.fElement': '耐性系統',
+    'action.fElementHint': 'ActionDefence::getEffectValueがこの値で分岐し、対象の系統別' +
+      '耐性レベルを選ぶ(確認済み)。系統名は同系統の呪文名からの推定',
+    'action.fFormula': '計算式タイプ',
+    'action.fFormulaHint': 'ActionEffectValue::getEffectValueが通常攻撃ダメージをこの値で' +
+      '加工する(確認済み)',
+    'action.fResistRank': '耐性ランク',
+    'action.fResistRankHint': 'ActionDefence::getEffectが(ランク, 対象の耐性レベル)から' +
+      '倍率を返す。表示は耐性レベル0,1,2,…の順。ランク0〜2/9は確率判定',
+    'action.fRollA': '威力ロールA',
+    'action.fRollAHint': '[min,max]の一様乱数。setEffectValueBasicで対象+0xc≠1のとき採用' +
+      '(確認済み。どちら側の対象かは推定で、モンスター側と思われる)',
+    'action.fRollB': '威力ロールB',
+    'action.fRollBHint': '[min,max]の一様乱数。setEffectValueBasicで対象+0xc==1のとき採用、' +
+      'setEffectValueもこちらを読む(確認済み。味方側の対象と推定)',
     'action.rawHeading': 'raw (92 byte)',
     'action.basedOn': '根拠',
     'action.typeIntro': 'dq7_action_type.dat (100レコード x 32byte)。戦闘エフェクト' +
@@ -62,21 +67,28 @@ DQ7I18N.extend({
     'action.fTypeByteHint': 'Upper 5 bits = category (estimated), lower 3 bits = sub (estimated). Does not appear to index dq7_action_type.dat rows',
     'action.fMpCost': 'MP cost',
     'action.fMpCostHint': '255 = consumes all remaining MP (e.g. Omniheal/Megazal)',
-    'action.fBonusGate': 'Bonus-eligibility gate',
-    'action.fBonusGateHint': 'bit0 = eligible for element/race bonus, bit1 = eligible for ' +
-      'two-handed-weapon-style correction, bit4 = eligible for the ATK fallback formula ' +
-      '(all confirmed by decompiling on 2026-10-06). Elemental/race "slash" techniques like ' +
-      'Frizz Slash all have this at 0 - none of these gates actually fire for them',
-    'action.fElement': 'Element/family',
-    'action.fElementHint': 'Estimated label, derived from the stepped MP cost within each spell family',
-    'action.fRoll': 'Base power/heal roll',
-    'action.fRollHint': 'Uniform random [min,max]. Confirmed by decompiling ' +
-      'ActionEffectValue::setEffectValue, which reads exactly this field (2026-10-06)',
-    'action.fUnknown3c': 'Unknown purpose (+0x3c/+0x3e)',
-    'action.fUnknown3cHint': 'Always <= the roll on the left, but no read of this field ' +
-      'turned up after decompiling ~25 damage-calculation-related functions. An earlier ' +
-      'version of this viewer called it "group/all-target power" with no real evidence, ' +
-      'and that claim has been retracted',
+    'action.fGate': 'Gate flags',
+    'action.fGateHint': 'bit0 = subject to multi-target falloff (getMuchiDamage), bit4 = ' +
+      'subject to recalculation with double-attack equipment (status::isDoubleAction). ' +
+      'Confirmed by decompiling',
+    'action.fElement': 'Resistance family',
+    'action.fElementHint': 'ActionDefence::getEffectValue switches on this to pick the ' +
+      'target\'s per-family resistance level (confirmed). Family names are estimated from ' +
+      'the spells that use each value',
+    'action.fFormula': 'Formula type',
+    'action.fFormulaHint': 'ActionEffectValue::getEffectValue transforms the normal-attack ' +
+      'damage according to this value (confirmed)',
+    'action.fResistRank': 'Resistance rank',
+    'action.fResistRankHint': 'ActionDefence::getEffect returns a multiplier from ' +
+      '(rank, target resistance level). Shown in order of resistance level 0, 1, 2, ... ' +
+      'Ranks 0-2/9 are probability checks instead',
+    'action.fRollA': 'Power roll A',
+    'action.fRollAHint': 'Uniform random [min,max]. setEffectValueBasic uses it when the ' +
+      'target\'s +0xc != 1 (confirmed; which side that is is an estimate - likely monsters)',
+    'action.fRollB': 'Power roll B',
+    'action.fRollBHint': 'Uniform random [min,max]. setEffectValueBasic uses it when the ' +
+      'target\'s +0xc == 1, and setEffectValue reads this pair (confirmed; estimated to be ' +
+      'party-side targets)',
     'action.rawHeading': 'raw (92 bytes)',
     'action.basedOn': 'Based on',
     'action.typeIntro': 'dq7_action_type.dat (100 records x 32 bytes). Believed to be a battle ' +
@@ -140,6 +152,7 @@ async function loadList() {
   }
   allActions = data.records || [];
   window._actionNote = data.note || '';
+  window._actionNoteEn = data.note_en || data.note || '';
   subEl.textContent =
     `${data.source} — ${data.record_count} ${DQ7I18N.t('action.records')} x ${data.record_size}byte. ${DQ7I18N.t('action.clickRowHint')}`;
   statusEl.textContent = `${allActions.length} actions`;
@@ -182,15 +195,22 @@ function selectAction(idx) {
   h += `<div class="sec">#${a.index}  ${esc(a.name || DQ7I18N.t('action.noName'))}</div>`;
   h += `<table class="kv2"><tr><th>${DQ7I18N.t('common.offset')}</th><th>${DQ7I18N.t('common.field')}</th><th>${DQ7I18N.t('common.value')}</th><th></th></tr>`;
   h += row('+0x00', 'type_byte', `${a.type_byte} (cat=${a.type_category}, sub=${a.type_sub})`, DQ7I18N.t('action.fTypeByteHint'));
-  h += row('+0x38/0x3a', DQ7I18N.t('action.fRoll'), `${a.roll_min} - ${a.roll_max}`, DQ7I18N.t('action.fRollHint'));
-  h += row('+0x3c/0x3e', DQ7I18N.t('action.fUnknown3c'), `${a.unknown3c_min} - ${a.unknown3c_max}`, DQ7I18N.t('action.fUnknown3cHint'));
-  h += row('+0x4a', DQ7I18N.t('action.fElement'), `${a.element_id} = ${elabel(a)}`, DQ7I18N.t('action.fElementHint'));
-  h += row('+0x4b', DQ7I18N.t('action.fMpCost'), a.mp_cost, DQ7I18N.t('action.fMpCostHint'));
-  h += row('+0x52', DQ7I18N.t('action.fBonusGate'), bits(a.bonus_gate_flags), DQ7I18N.t('action.fBonusGateHint'));
+  const en = DQ7I18N.getLang() === 'en';
+  const flabel = en ? a.formula_label_en : a.formula_label;
+  const rankTbl = a.resist_rank_table
+    ? '  [' + a.resist_rank_table.map(v => '×' + (v / 1000).toFixed(2)).join(', ') + ']'
+    : '';
+  h += row('+0x34/0x36', DQ7I18N.t('action.fRollA'), `${a.roll_a_min} - ${a.roll_a_max}`, DQ7I18N.t('action.fRollAHint'));
+  h += row('+0x38/0x3a', DQ7I18N.t('action.fRollB'), `${a.roll_b_min} - ${a.roll_b_max}`, DQ7I18N.t('action.fRollBHint'));
+  h += row('+0x46', DQ7I18N.t('action.fElement'), `${a.element_id} = ${elabel(a)}`, DQ7I18N.t('action.fElementHint'));
+  h += row('+0x47', DQ7I18N.t('action.fMpCost'), a.mp_cost, DQ7I18N.t('action.fMpCostHint'));
+  h += row('+0x4c', DQ7I18N.t('action.fFormula'), `0x${a.formula.toString(16).padStart(2, '0')}` + (flabel ? ` = ${flabel}` : ''), DQ7I18N.t('action.fFormulaHint'));
+  h += row('+0x52', DQ7I18N.t('action.fGate'), bits(a.gate_flags), DQ7I18N.t('action.fGateHint'));
+  h += row('+0x56', DQ7I18N.t('action.fResistRank'), `${a.resist_rank}${rankTbl}`, DQ7I18N.t('action.fResistRankHint'));
   h += `</table>`;
 
   h += `<div class="sec">${DQ7I18N.t('action.rawHeading')}</div><div class="mono">${a.raw_hex.replace(/(..)/g, '$1 ').trim()}</div>`;
-  h += `<div class="sec hint" style="font-weight:normal">${esc(window._actionNote || '')}</div>`;
+  h += `<div class="sec hint" style="font-weight:normal">${esc((en ? window._actionNoteEn : window._actionNote) || '')}</div>`;
 
   detailEl.innerHTML = h;
 }

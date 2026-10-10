@@ -952,19 +952,58 @@ def parse_item_list() -> dict:
 _action_param_cache = None
 _action_type_cache = None
 
-# +0x4a の下位byte(=element_id)。炎/光/爆発/氷/風/雷のファミリー内で
-# MP消費量が段階的に増える並び(メラ2→メラミ4→メラゾーマ10 等)から逆算した
-# 推定ラベル。22は補助/回復系呪文で頻出する「無属性」固定値。確証は無い。
+# LEVELDATA の共通ヘッダは magic/nrec/rsize/nrec/0 の5ワード(20byte)で、レコードは
+# ファイル先頭+0x14から始まる(ExcelBinaryData::getRecordDynamic が
+# `index*rsize + base + 0x14` で計算している)。以下のオフセットは全てこの
+# レコード先頭基準 = ExeFSのデコンパイル結果と同じ基準。
+_ACTION_RECORD_BASE = 0x14
+
+# +0x46: 耐性系統。ActionDefence::getEffectValue がこの値で switch し、対象側の
+# 系統別耐性レベルを選ぶ。22 は常に等倍(1000‰)を返す case。系統名は
+# 同系統の呪文名からの推定ラベル。
 _ACTION_ELEMENT_LABEL = {
     0: 'メラ系(炎)', 1: 'ギラ系(光)', 2: 'イオ系(爆発)', 3: 'ヒャド系(氷)',
     4: 'バギ系(風)', 5: 'デイン系(雷)', 6: 'ザキ系(即死)', 8: 'バシルーラ系(強制排除)',
-    22: '無属性(補助/回復)',
+    22: '無属性(耐性判定なし・常に等倍)',
 }
 _ACTION_ELEMENT_LABEL_EN = {
     0: 'Mera family (fire)', 1: 'Gira family (light)', 2: 'Io family (explosion)',
     3: 'Hyado family (ice)', 4: 'Bagi family (wind)', 5: 'Dein family (thunder)',
     6: 'Zaki family (instant death)', 8: 'Basirura family (banish)',
-    22: 'Non-elemental (support/heal)',
+    22: 'Non-elemental (no resistance check, always x1)',
+}
+
+# +0x56 bit5-7: 耐性ランク。ActionDefence::getEffect が (ランク, 対象の耐性レベル)
+# から千分率の倍率を返す。ランク3〜8は固定倍率、0〜2/9は確率判定(1000か0)。
+_ACTION_RESIST_RANK_TABLE = {
+    3: [1000, 750, 400, 0],
+    4: [1000, 800, 500, 0],
+    5: [1300, 1150, 750, 300],
+    6: [750, 500, 250, 0],
+    8: [1000, 750, 660, 500, 330, 250, 100, 0],
+}
+
+# +0x4c: 計算式タイプ。ActionEffectValue::getEffectValue が通常攻撃ダメージを
+# この値で加工する(主なもののみ)。
+_ACTION_FORMULA_LABEL = {
+    0: ('そのまま(威力ロール側で決まる)', 'unchanged (decided by the power roll)'),
+    1: ('通常攻撃と同じ', 'same as a normal attack'),
+    3: ('通常攻撃×25%', 'normal attack x25%'),
+    4: ('通常攻撃×50%', 'normal attack x50%'),
+    5: ('通常攻撃×75%', 'normal attack x75%'),
+    6: ('通常攻撃×80%', 'normal attack x80%'),
+    7: ('通常攻撃×125%', 'normal attack x125%'),
+    8: ('通常攻撃×150%', 'normal attack x150%'),
+    9: ('通常攻撃×200%', 'normal attack x200%'),
+    0x0b: ('対象フラグ+0xf11で×150%', 'x150% if target flag +0xf11'),
+    0x0c: ('対象フラグ+0xf10で×150%', 'x150% if target flag +0xf10'),
+    0x0d: ('対象フラグ+0xf0dで×150%', 'x150% if target flag +0xf0d'),
+    0x0e: ('対象フラグ+0xf0fで×150%', 'x150% if target flag +0xf0f'),
+    0x0f: ('対象フラグ+0xf0eで×150%(+1)', 'x150% (+1) if target flag +0xf0e'),
+    0x13: ('複数対象逓減(getMuchiDamage)', 'multi-target falloff (getMuchiDamage)'),
+    0x14: ('通常攻撃×170%', 'normal attack x170%'),
+    0x2f: ('対象フラグ+0xf10で×125%', 'x125% if target flag +0xf10'),
+    0x33: ('通常攻撃×70%', 'normal attack x70%'),
 }
 
 
@@ -980,42 +1019,41 @@ def parse_action_param() -> dict:
 
     records = []
     for i in range(nrec):
-        r = data[16 + i * rsize:16 + (i + 1) * rsize]
+        base = _ACTION_RECORD_BASE + i * rsize
+        r = data[base:base + rsize]
         type_byte = r[0]
-        elem_id = r[0x4a]
-        mp_cost = r[0x4b]
-        # +0x34/+0x36: ExeFS(ActionEffectValue::setEffectValueBasic等)には読み込み
-        # コードがあるが、804レコード全件で常にゼロ(死にフィールド)と確認済み。
-        unused_min, unused_max = struct.unpack_from('<2H', r, 0x34)
-        # +0x38/+0x3a: ActionEffectValue::setEffectValue で実際に [min,max] の一様乱数
-        # ロールとして読まれることをデコンパイルで確認済み(2026-10-06)。
-        roll_min, roll_max = struct.unpack_from('<2H', r, 0x38)
-        # +0x3c/+0x3e: pairA(+0x38)より常に小さいか等しいという観察はあるが、ダメージ
-        # 計算関連の関数を約25個デコンパイルしても読み込み箇所が見つからず、用途不明
-        # (旧ドキュメントの「複数/全体対象威力」という説明は撤回済み)。
-        unknown3c_min, unknown3c_max = struct.unpack_from('<2H', r, 0x3c)
-        # +0x52: ボーナス発動ゲートのビットフラグ(2026-10-06デコンパイルで確認)。
-        # bit0=属性/種族ボーナス対象, bit1=両手持ち等の補正対象, bit4=ATKフォール
-        # バック対象。かえん斬り等の元素/種族斬り技は全てこの値が0で、ゲートが
-        # どれも成立しないことを確認した(docs参照)。
-        bonus_gate_flags = r[0x52]
+        # +0x34/+0x36 と +0x38/+0x3a: [min,max] の一様乱数ロール2組。
+        # setEffectValueBasic は対象ステータス+0xc==1 のとき B、それ以外で A を採用し、
+        # setEffectValue は B を読む(デコンパイルで確認)。+0xc==1 が味方側を指すかは推定。
+        roll_a_min, roll_a_max = struct.unpack_from('<2H', r, 0x34)
+        roll_b_min, roll_b_max = struct.unpack_from('<2H', r, 0x38)
+        elem_id = r[0x46]
+        mp_cost = r[0x47]
+        formula = r[0x4c]
+        # +0x52: bit0=複数対象逓減(getMuchiDamage)の対象, bit4=status::isDoubleAction の対象
+        gate_flags = r[0x52]
+        resist_rank = r[0x56] >> 5
+        flabel = _ACTION_FORMULA_LABEL.get(formula)
         records.append({
             'index': i,
             'name': anames.get(i, ''),
             'type_byte': type_byte,                    # +0x00
             'type_category': type_byte >> 3,            # 推定: 上位5bit
             'type_sub': type_byte & 7,                  # 推定: 下位3bit
-            'unused_min': unused_min,                   # +0x34 コード上は存在するが常に0
-            'unused_max': unused_max,                   # +0x36 同上
-            'roll_min': roll_min,                       # +0x38 基本威力/回復量ロール 最小値(確認済み)
-            'roll_max': roll_max,                       # +0x3a 同 最大値(確認済み)
-            'unknown3c_min': unknown3c_min,             # +0x3c 用途不明(未確認)
-            'unknown3c_max': unknown3c_max,             # +0x3e 用途不明(未確認)
-            'element_id': elem_id,                       # +0x4a
+            'roll_a_min': roll_a_min,                   # +0x34
+            'roll_a_max': roll_a_max,                   # +0x36
+            'roll_b_min': roll_b_min,                   # +0x38
+            'roll_b_max': roll_b_max,                   # +0x3a
+            'element_id': elem_id,                      # +0x46 耐性系統
             'element_label': _ACTION_ELEMENT_LABEL.get(elem_id, f'? ({elem_id})'),
             'element_label_en': _ACTION_ELEMENT_LABEL_EN.get(elem_id, f'? ({elem_id})'),
-            'mp_cost': mp_cost,                          # +0x4b (255 = メガザルの"MP全消費")
-            'bonus_gate_flags': bonus_gate_flags,        # +0x52 ボーナス発動ゲート(確認済み、詳細はdocs)
+            'mp_cost': mp_cost,                         # +0x47 (255 = メガザルの"MP全消費")
+            'formula': formula,                         # +0x4c 計算式タイプ
+            'formula_label': flabel[0] if flabel else '',
+            'formula_label_en': flabel[1] if flabel else '',
+            'gate_flags': gate_flags,                   # +0x52
+            'resist_rank': resist_rank,                 # +0x56 bit5-7
+            'resist_rank_table': _ACTION_RESIST_RANK_TABLE.get(resist_rank),
             'raw_hex': r.hex(),
         })
     _action_param_cache = {
@@ -1024,13 +1062,20 @@ def parse_action_param() -> dict:
         'record_count': nrec,
         'header_ok': nrec == nrec2,
         'field_doc': 'docs/action_param_action_type_investigation.md',
-        'note': '+0x38/+0x3aの基本威力ロールはExeFS(ActionEffectValue::setEffectValue等)'
-                'のデコンパイルで確認済み(2026-10-06)。element_id/type_byteの分類名は'
-                'MP消費量など既知の数値からの逆算による推定。+0x3c/+0x3eの用途、および'
-                'かえん斬り等の物理わざ固有倍率がExeFS側のどこにハードコードされて'
-                'いるかは未確認(詳細はdocs参照)。'
+        'record_base': _ACTION_RECORD_BASE,
+        'note': 'オフセットはレコード先頭(ファイル+0x14)基準で、ExeFSのデコンパイル結果と'
+                '同じ基準。かえん斬り等の元素斬りは 計算式=通常攻撃と同じ・耐性ランク5 で、'
+                '倍率は対象の耐性レベルに応じて ×1.30/×1.15/×0.75/×0.30。'
+                '系統名・type_byteの分類名は推定。'
                 'record index 248以降は ACTION_NAME.txt に名前が無い'
                 '(モンスター専用技と推測、未確認)。',
+        'note_en': 'Offsets are relative to the record start (file +0x14), matching the '
+                   'decompiled ExeFS code. Elemental slashes such as Frizz Slash use '
+                   'formula "same as a normal attack" with resistance rank 5, giving '
+                   'x1.30/x1.15/x0.75/x0.30 depending on the target\'s resistance level. '
+                   'Family names and type_byte categories are estimates. '
+                   'Indices 248+ have no name in ACTION_NAME.txt (likely monster-only, '
+                   'unconfirmed).',
         'records': records,
     }
     return _action_param_cache
