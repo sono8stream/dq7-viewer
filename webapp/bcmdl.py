@@ -537,6 +537,12 @@ class Cgfx:
         uv0 = self._decode_attr(stream, stride, vcount, uv_a) if uv_a else None
         uv1 = self._decode_attr(stream, stride, vcount, uv1_a) if uv1_a else None
         uv2 = self._decode_attr(stream, stride, vcount, uv2_a) if uv2_a else None
+        # Vertex color (usage 3). Map parts (MAP/MAPDATA FldData) carry
+        # position+color+uv0 with no normals - the lighting is baked into
+        # this RGBA (float 0..1 there; the attribute's own scale normalizes
+        # other formats the same way as uv/boneWeight).
+        col_a = next((a for a in inter['attrs'] if a[0] == 'color'), None)
+        col = self._decode_attr(stream, stride, vcount, col_a) if col_a else None
         bidx = self._decode_attr(stream, stride, vcount, bi_a) if bi_a else None
         bwgt = self._decode_attr(stream, stride, vcount, bw_a) if bw_a else None
         poff = struct.unpack_from('<3f', self.d, s + 0x20)
@@ -595,6 +601,7 @@ class Cgfx:
         # expanded, per-submesh-transformed vertex list (models here are small).
         out_pos, out_nrm, out_uv, out_idx = [], [], [], []
         out_uv1, out_uv2 = [], []
+        out_col = []
         out_skin_idx, out_skin_weight = [], []
         used_any = False
         any_skin = False
@@ -640,6 +647,8 @@ class Cgfx:
                         out_uv1.extend((uv1[vi] + (0, 0))[:2])
                     if uv2:
                         out_uv2.extend((uv2[vi] + (0, 0))[:2])
+                    if col:
+                        out_col.extend((col[vi] + (1, 1, 1, 1))[:4])
                 out_idx.append(remap[key])
 
         if not used_any:
@@ -657,6 +666,8 @@ class Cgfx:
                 out_uv1 = [c for v in uv1 for c in (list(v) + [0, 0])[:2]]
             if uv2:
                 out_uv2 = [c for v in uv2 for c in (list(v) + [0, 0])[:2]]
+            if col:
+                out_col = [c for v in col for c in (list(v) + [1, 1, 1, 1])[:4]]
             out_idx = list(range(len(pos)))
 
         out = {
@@ -674,6 +685,8 @@ class Cgfx:
             out['uvs1'] = out_uv1
         if out_uv2:
             out['uvs2'] = out_uv2
+        if out_col:
+            out['colors'] = out_col
         if out['skinned']:
             out['skinIndex'] = out_skin_idx
             out['skinWeight'] = out_skin_weight
@@ -961,6 +974,62 @@ def _tex_env_mapper_roles(cg, mo, end):
     return roles
 
 
+# PICATextureCombinerSource.PrimaryColor - the vertex shader's output color,
+# i.e. the per-vertex `color` attribute for the unlit map shaders.
+_TEXENV_SRC_PRIMARY_COLOR = 0
+
+
+def _tex_env_vertex_color_mode(cg, mo, end):
+    """'modulate' | 'replace' | ... (the combiner mode of the first active
+    TexEnv stage that reads PrimaryColor as a COLOR input), or None when no
+    stage does. Same stage scan / input-count truncation as
+    `_tex_env_mapper_roles()`. Every map part material (MAP/MAPDATA FldData,
+    648 materials sampled across c01nout/wld_n25a) is stage0 =
+    Modulate(PrimaryColor, Texture0) with stages 1.. = Replace(Previous): the
+    baked vertex color multiplies the texture."""
+    d = cg.d
+    off = 4
+    limit = end - mo
+    while off + 16 <= limit:
+        if _TEXENV_HDRS.get(struct.unpack_from('<I', d, mo + off)[0]) is not None:
+            source = struct.unpack_from('<I', d, mo + off - 4)[0]
+            combiner = struct.unpack_from('<I', d, mo + off + 8)[0]
+            color_mode = _COMBINER_MODE_NAMES[combiner & 0xf]
+            n_color = _COMBINER_INPUT_COUNT.get(color_mode, 3)
+            if _TEXENV_SRC_PRIMARY_COLOR in [(source >> k) & 0xf for k in (0, 4, 8)][:n_color]:
+                return color_mode
+        off += 4
+    return None
+
+
+def _shape_vertex_color_modes(cg, n_shapes):
+    """[mode | None] per shape index via GfxMesh (ShapeIndex@+0x18,
+    MaterialIndex@+0x1C) -> material -> `_tex_env_vertex_color_mode()`."""
+    mats = []  # material offsets in dict order
+    for m in cg._model_offsets():
+        mc, mp = cg._list_ref(m + 0xBC)
+        if mp and cg.d[mp:mp + 4] == b'DICT':
+            mats.extend(mo for _, mo in cg.read_dict(mp))
+    by_offset = sorted(mo for mo in mats if mo)
+    next_start = {mo: (by_offset[i + 1] if i + 1 < len(by_offset) else min(mo + 0x900, len(cg.d)))
+                  for i, mo in enumerate(by_offset)}
+    modes = [(_tex_env_vertex_color_mode(cg, mo, next_start[mo]) if mo else None) for mo in mats]
+    res = [None] * n_shapes
+    for m in cg._model_offsets():
+        mc, ma = cg._list_ref(m + 0xB4)          # Meshes array
+        if not ma or not (0 < mc <= 4096):
+            continue
+        for k in range(mc):
+            mo = cg.ref(ma + k * 4)
+            if not mo or cg.d[mo + 4:mo + 8] != b'SOBJ':
+                continue
+            si = cg.i32(mo + 0x18)
+            mi = cg.i32(mo + 0x1C)
+            if 0 <= si < n_shapes and 0 <= mi < len(modes):
+                res[si] = modes[mi]
+    return res
+
+
 # GfxTextureCoord[3] (SPICA CtrGfx.Model.Material.GfxTextureCoord, the
 # `TextureCoords` field on GfxMaterial) is a genuinely fixed-size, fixed-offset
 # inline VALUE-TYPE array (unlike TextureMappers[], whose slots are
@@ -1025,7 +1094,7 @@ def _tex_coord_indices(cg, mo):
     return out
 
 
-def _materials(cg):
+def _materials(cg, ext_tex_names=None):
     """Ordered [(material_name, [texture_name, ...], alphaTest, side,
     coordIdx, mapperRoles), ...] from the MODEL's Materials dict (model+0xBC
     count / +0xC0 ref -> DICT of MTOB). The per-material texture-name strings
@@ -1036,8 +1105,18 @@ def _materials(cg):
     `_cull_mode()`/`_tex_env_mapper_roles()`) are looked up in the byte range
     up to the next material's start (materials are laid out back-to-back in
     file order; MTOB records are variable-sized so a fixed offset doesn't
-    work)."""
+    work).
+
+    `ext_tex_names`: texture names that live OUTSIDE this CGFX. Map parts
+    (MAP/MAPDATA/*.pack.lz FldData, see mappack.py) carry no Textures dict of
+    their own - each material's mapper points at an inline
+    GfxTextureReference (TXOB, TypeChoice 0x20000004) whose `Path` (+0x18)
+    names a texture in the map pack's shared texture CGFX. The scan below
+    already reaches that Path pointer (the reference TXOB sits inside the
+    MTOB record), it just needs to know the external names are valid."""
     tex_names = {t['name'] for t in cg.textures()}
+    if ext_tex_names:
+        tex_names |= set(ext_tex_names)
     entries = []  # (mo, mname)
     for m in cg._model_offsets():
         mc, mp = cg._list_ref(m + 0xBC)
@@ -1046,7 +1125,10 @@ def _materials(cg):
         for mname, mo in cg.read_dict(mp):
             entries.append((mo, mname))
     by_offset = sorted((e for e in entries if e[0]), key=lambda e: e[0])
-    next_start = {mo: (by_offset[i + 1][0] if i + 1 < len(by_offset) else mo + 0x900)
+    # the last material has no successor: scan at most 0x900 bytes, but never
+    # past the end of the buffer (small CGFX - e.g. a map part with a single
+    # material near the end of the file - used to raise struct.error here)
+    next_start = {mo: (by_offset[i + 1][0] if i + 1 < len(by_offset) else min(mo + 0x900, len(cg.d)))
                   for i, (mo, _) in enumerate(by_offset)}
     out = []
     for mo, mname in entries:
@@ -1070,7 +1152,7 @@ def _materials(cg):
     return out
 
 
-def _shape_textures(cg, n_shapes):
+def _shape_textures(cg, n_shapes, ext_tex_names=None):
     """([[texture_name, ...] | None], [alphaTest | None], [side | None],
     [[uvChannel, ...] | None], [[blendMode, ...] | None]) per shape index,
     resolved through GfxMesh (ShapeIndex@+0x18, MaterialIndex@+0x1C) ->
@@ -1081,7 +1163,7 @@ def _shape_textures(cg, n_shapes):
     `blendMode[i]` is 'base' for stage 0, else 'blend'/'multiply'/'add'/
     'unused' from `_tex_env_mapper_roles()` (missing role -> 'unused': the
     combiner never samples this stage, so it must not be drawn at all)."""
-    mats = _materials(cg)
+    mats = _materials(cg, ext_tex_names)
     tex_res = [None] * n_shapes
     alpha_res = [None] * n_shapes
     side_res = [None] * n_shapes
@@ -1181,26 +1263,21 @@ def _base_texture_mostly_holes(cg, uvs, texname, _cache, threshold=0.6):
     return (low / n) > threshold
 
 
-def read_model(path):
-    """High-level: path -> {structure, geometry, textures, materials}.
-
-    A `.pack.lz` file holds only a `SkeletalAnims` dict (no `Models`/
-    `Textures`) - the actual geometry+textures live in the sibling
-    `.bcmdl.lz` (verified across CHARACTER/MONSTER/BATTLE; see
-    docs/bcmdl_model_viewer.md). If called with a `.pack.lz` path,
-    transparently redirect to that sibling so the viewer shows a real
-    model regardless of which file the user picked from the list
-    (previously this silently returned empty geometry/textures)."""
-    if path.endswith('.pack.lz'):
-        sibling = path[:-len('.pack.lz')] + '.bcmdl.lz'
-        if os.path.isfile(sibling):
-            path = sibling
-    cg = get_cgfx(path)
-    texs = [{k: v for k, v in t.items() if not k.startswith('_')}
-            for t in cg.textures()]
-    geo = cg.geometry()
-    shp_tex, shp_alpha, shp_side, shp_coord, shp_blend = _shape_textures(cg, len(geo['shapes']))
+def attach_shape_materials(cg, geo, ext_tex_names=None, tex_cg=None):
+    """Annotate each shape dict of `geo` (cg.geometry()) in place with its
+    material's textures/textureBlend/side/textureUV/alphaTest, all read from
+    the model's structures (see the per-field comments below).
+    `ext_tex_names`/`tex_cg`: for CGFX whose textures live in ANOTHER CGFX
+    (map parts - see `_materials()` and mappack.py); `tex_cg` is the CGFX
+    that actually holds those textures (only used by the opaqueBase fallback)."""
+    shp_tex, shp_alpha, shp_side, shp_coord, shp_blend = _shape_textures(cg, len(geo['shapes']), ext_tex_names)
     holes_cache = {}
+    # vertexColor: how the per-vertex `colors` enter the pixel color, read
+    # from the material's TexEnv (`_tex_env_vertex_color_mode()`); only
+    # attached when the shape actually has a color attribute.
+    for sh, vc in zip(geo['shapes'], _shape_vertex_color_modes(cg, len(geo['shapes']))):
+        if vc and sh.get('colors'):
+            sh['vertexColor'] = vc
     for sh, tn, at, side, coord, blend in zip(geo['shapes'], shp_tex, shp_alpha, shp_side, shp_coord, shp_blend):
         if tn:
             sh['textures'] = tn
@@ -1225,11 +1302,32 @@ def read_model(path):
             base_uvs = sh.get(base_uv_key)
             if at is not None:
                 sh['alphaTest'] = at
-            elif sh.get('ok') and _base_texture_mostly_holes(cg, base_uvs, tn[0], holes_cache):
+            elif sh.get('ok') and _base_texture_mostly_holes(tex_cg or cg, base_uvs, tn[0], holes_cache):
                 # fallback heuristic only reached when the material's real
                 # GfxAlphaTest command pair couldn't be located - see
                 # _alpha_test()/_base_texture_mostly_holes().
                 sh['opaqueBase'] = True
+
+
+def read_model(path):
+    """High-level: path -> {structure, geometry, textures, materials}.
+
+    A `.pack.lz` file holds only a `SkeletalAnims` dict (no `Models`/
+    `Textures`) - the actual geometry+textures live in the sibling
+    `.bcmdl.lz` (verified across CHARACTER/MONSTER/BATTLE; see
+    docs/bcmdl_model_viewer.md). If called with a `.pack.lz` path,
+    transparently redirect to that sibling so the viewer shows a real
+    model regardless of which file the user picked from the list
+    (previously this silently returned empty geometry/textures)."""
+    if path.endswith('.pack.lz'):
+        sibling = path[:-len('.pack.lz')] + '.bcmdl.lz'
+        if os.path.isfile(sibling):
+            path = sibling
+    cg = get_cgfx(path)
+    texs = [{k: v for k, v in t.items() if not k.startswith('_')}
+            for t in cg.textures()]
+    geo = cg.geometry()
+    attach_shape_materials(cg, geo)
     return {
         'structure': cg.structure(),
         'geometry': geo,

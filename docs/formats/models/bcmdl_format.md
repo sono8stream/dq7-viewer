@@ -16,6 +16,7 @@ such).
 | `MONSTER/` | `eNNN.pack.lz` | LZ11-compressed `PackData`. Contents are CGFX (SkeletalAnims) + CANM |
 | `GOODS/` | — | Equipment (hats, etc.) models. Sometimes managed in a separate file from the body mesh |
 | `SHAPE/` | `*.shp.lz` | LZ11-compressed `PackData` (small shapes, uninvestigated) |
+| `MAP/MAPDATA/` | `<mapcode>.pack.lz` | LZ11-compressed map pack (`MODEL` container): one CGFX per part + shared texture CGFX. See `map_pack.md` |
 
 - LZ11 is standard LZ11 compression with header byte0 = `0x11`.
 - `PackData` container: magic `'PackData'` / `+0x10` u32 entryCount / `+0x14`

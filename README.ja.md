@@ -127,6 +127,7 @@ python3 server.py
 | `character_job_assets.md` | キャラクタービジュアルアセットの配置規則 |
 | `face_expression_textures.md` | 表情差分テクスチャの格納形式 |
 | `image_containers.md` | 画像コンテナ形式(bctex/bcmdl/dmp/fpt) |
+| `map_pack.md` | マップモデルパック(`MAP/MAPDATA/*.pack.lz`): 部品・配置・コリジョン |
 
 ## 注意点
 

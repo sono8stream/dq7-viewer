@@ -14,6 +14,7 @@ DQ7(3DS)の3Dモデルは任天堂3DS標準の中間フォーマットCGFX(拡�
 | `MONSTER/` | `eNNN.pack.lz` | LZ11圧縮の`PackData`。中身はCGFX(SkeletalAnims) + CANM |
 | `GOODS/` | — | 装備品(帽子等)モデル。本体メッシュとは別ファイルで管理されるケースがある |
 | `SHAPE/` | `*.shp.lz` | LZ11圧縮の`PackData`(小さい形状、未調査) |
+| `MAP/MAPDATA/` | `<マップコード>.pack.lz` | LZ11圧縮のマップパック(`MODEL`コンテナ): 部品ごとのCGFX＋共有テクスチャCGFX。`map_pack.md`参照 |
 
 - LZ11はヘッダbyte0=`0x11`の標準LZ11圧縮。
 - `PackData`コンテナ: マジック`'PackData'` / `+0x10` u32 entryCount / `+0x14` u32

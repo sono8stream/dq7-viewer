@@ -3,9 +3,10 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Node-side test helpers for the DQ7 webapp (3D model viewer render check)",
+  "description": "Node-side test helpers for the DQ7 webapp (3D model / map viewer render checks)",
   "scripts": {
-    "test:model": "node test_model_render.mjs"
+    "test:model": "node test_model_render.mjs",
+    "test:map": "node test_map_render.mjs"
   },
   "devDependencies": {
     "three": "0.167.0"

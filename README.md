@@ -131,6 +131,7 @@ areas.
 | `character_job_assets.md` | Character visual asset layout rules |
 | `face_expression_textures.md` | Facial expression (blink/lip-sync) texture storage |
 | `image_containers.md` | Image container formats (bctex/bcmdl/dmp/fpt) |
+| `map_pack.md` | Map model packs (`MAP/MAPDATA/*.pack.lz`): parts, placement, collision |
 
 ## Notes
 

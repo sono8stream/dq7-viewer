@@ -28,6 +28,7 @@ import argparse
 import base64
 import datetime
 import functools
+import gzip
 import http.server
 import json
 import os
@@ -100,6 +101,7 @@ import script_viewer as sv  # noqa: E402
 import save_editor  # noqa: E402
 import splice_procedure as sp  # noqa: E402
 import bcmdl  # noqa: E402  (LZ11 + CGFX .bcmdl model reader for the モデル viewer)
+import mappack  # noqa: E402  (MAP/*.pack.lz map model packs for the マップ3D viewer)
 import dq7_rpc_probe as rpc_probe  # noqa: E402  (Azahar RPCサーバー経由のライブメモリプローブ、docs/keifa_job_animation_investigation.md)
 import imagebrowser  # noqa: E402  (RomFS-wide image enumeration/decode for the 画像 viewer)
 
@@ -1644,6 +1646,51 @@ def model_animation(rel: str, name: str) -> dict:
     """{name, frames, tracks} for one SkeletalAnims clip - see bcmdl.read_animation."""
     full = _safe_model_path(rel)
     return bcmdl.read_animation(full, name)
+
+
+# --- map model packs (MAP/MAPDATA/*.pack.lz) ---------------------------------
+# See mappack.py and docs/formats/models/map_pack.md for the container layout.
+
+def list_map_files() -> list:
+    """Every map pack under RomFS MAP/ (top level) and MAP/MAPDATA/."""
+    root = os.path.join(_ROMFS_DIR, 'MAP')
+    out = []
+    for sub in ('MAPDATA', ''):
+        d = os.path.join(root, sub) if sub else root
+        if not os.path.isdir(d):
+            continue
+        for name in sorted(os.listdir(d)):
+            full = os.path.join(d, name)
+            if not name.endswith('.pack.lz') or not os.path.isfile(full):
+                continue
+            out.append({
+                'path': f'{sub}/{name}' if sub else name,
+                'name': name[:-len('.pack.lz')],
+                'size': os.path.getsize(full),
+            })
+    return out
+
+
+def _safe_map_path(rel: str) -> str:
+    if not rel or '..' in rel or rel.startswith('/') or not rel.endswith('.pack.lz'):
+        raise ValueError('invalid path')
+    parts = rel.split('/')
+    if not (len(parts) == 1 or (len(parts) == 2 and parts[0] == 'MAPDATA')):
+        raise ValueError('invalid path')
+    full = os.path.join(_ROMFS_DIR, 'MAP', *parts)
+    if not os.path.isfile(full):
+        raise FileNotFoundError(rel)
+    return full
+
+
+def parse_map_file(rel: str) -> dict:
+    res = mappack.read_map(_safe_map_path(rel))
+    res['file'] = rel
+    return res
+
+
+def map_texture_png(rel: str, name: str) -> bytes:
+    return mappack.texture_png(_safe_map_path(rel), name)
 
 
 def parse_fpt_full(filename: str) -> dict:
@@ -3420,8 +3467,16 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
     def _send_json(self, obj, status=200):
         body = json.dumps(obj, ensure_ascii=False).encode('utf-8')
+        # Map geometry responses run to several MB of JSON; gzip cuts that
+        # ~4x, which matters on a phone over Wi-Fi. Small bodies stay plain.
+        gz = (len(body) > 64 * 1024
+              and 'gzip' in (self.headers.get('Accept-Encoding') or ''))
+        if gz:
+            body = gzip.compress(body, compresslevel=5)
         self.send_response(status)
         self.send_header('Content-Type', 'application/json; charset=utf-8')
+        if gz:
+            self.send_header('Content-Encoding', 'gzip')
         self.send_header('Content-Length', str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -3549,6 +3604,43 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 self._send_json({'error': str(e)}, status=400)
             except Exception as e:
                 self._send_json({'error': f'{type(e).__name__}: {e}'}, status=500)
+            return
+
+        if parsed.path == '/api/map_files':
+            self._send_json(list_map_files())
+            return
+
+        if parsed.path == '/api/map':
+            rel = (qs.get('file') or [''])[0]
+            try:
+                self._send_json(parse_map_file(rel))
+            except FileNotFoundError:
+                self._send_json({'error': 'not found'}, status=404)
+            except ValueError as e:
+                self._send_json({'error': str(e)}, status=400)
+            except Exception as e:
+                self._send_json({'error': f'{type(e).__name__}: {e}'}, status=500)
+            return
+
+        if parsed.path == '/api/map/texture':
+            rel = (qs.get('file') or [''])[0]
+            name = (qs.get('name') or [''])[0]
+            try:
+                png = map_texture_png(rel, name)
+            except FileNotFoundError:
+                self._send_json({'error': 'not found'}, status=404)
+                return
+            except Exception as e:
+                self._send_json({'error': f'{type(e).__name__}: {e}'}, status=500)
+                return
+            if not png:
+                self._send_json({'error': 'texture not decodable'}, status=404)
+                return
+            self.send_response(200)
+            self.send_header('Content-Type', 'image/png')
+            self.send_header('Content-Length', str(len(png)))
+            self.end_headers()
+            self.wfile.write(png)
             return
 
         if parsed.path == '/api/img/tree':
