@@ -192,7 +192,12 @@ ETC1A4 / RGBA4, with a small number of L8/HiLo8/RGB8/LA8.
 - For RGB565 / RGBA5551 / RGBA4, each bitfield has **R in the high bits**
   (the standard GL order equivalent to `GL_UNSIGNED_SHORT_5_6_5`=0x8363 /
   `..._5_5_5_1`=0x8034).
-- ETC1 / ETC1A4 use 4x4 block compression (standard ETC1 rules).
+- ETC1 / ETC1A4 use 4x4 block compression (standard ETC1 rules). Each
+  8-byte colour block is stored as a little-endian u64 (ETC1A4: preceded by
+  an 8-byte 4-bit alpha block), i.e. byte-reversed relative to the standard
+  big-endian ETC1 block: read big-endian, the colour word is the low 32 bits
+  with R in bits 0..7, G in 8..15, B in 16..23 and the table/diff/flip bits
+  in 24..31.
 - Only mip0 is a target for decoding (higher mips may require separate
   generation).
 

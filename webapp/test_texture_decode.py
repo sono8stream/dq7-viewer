@@ -4,7 +4,9 @@ Sanity check for webapp/ctr_texture.py channel order + bit layout.
 Face / skin textures must come out warm (avg R > avg B). This is the
 regression guard for the R/B swap bug in the 16-bit formats (DQ7 packs
 RGB565 / RGBA5551 / RGBA4 with R in the HIGH bits, unlike SPICA's
-helpers). Run: python3 webapp/test_texture_decode.py
+helpers). Sea / sky map textures (ETC1) must come out cool (avg B > avg R):
+guard for the ETC1 R/B swap (see ctr_texture._etc1_tile).
+Run: python3 webapp/test_texture_decode.py
 """
 import os
 import sys
@@ -13,6 +15,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
 import bcmdl  # noqa: E402
 import ctr_texture  # noqa: E402
+import mappack  # noqa: E402
 
 _ROM_DIR = os.environ.get('DQ7_ROM_DIR') or os.path.join(_HERE, '..', 'rom')
 _EXTRACTED = os.path.join(_ROM_DIR, 'extracted')
@@ -22,6 +25,12 @@ CASES = [
     ('CHARACTER/p0003_j00.bcmdl.lz', 'kao', 'warm'),   # Keifa face (RGB565)
     ('CHARACTER/p0001_j00.bcmdl.lz', 'face', 'warm'),  # Hero face (RGBA5551)
     ('CHARACTER/p0001_j00.bcmdl.lz', 'e0', 'warm'),    # eyes (skin-ish)
+]
+
+# (map pack, exact texture name in its shared texture CGFX, expectation)
+MAP_CASES = [
+    ('MAP/MAPDATA/c01nout.pack.lz', 'c01umi1', 'cool'),    # sea (ETC1)
+    ('MAP/MAPDATA/c01nout.pack.lz', 'x08sora01', 'cool'),  # sky backdrop (ETC1)
 ]
 
 
@@ -63,6 +72,26 @@ def main():
         r, g, b = avg_rgb(rgba, n)
         ok = (r > b) if expect == 'warm' else (b > r)
         print(f"  {'OK  ' if ok else 'FAIL'} {rel} [{tex['name']} {tex['format']}] "
+              f"avgRGB=({r},{g},{b}) expect {expect}")
+        if not ok:
+            fails += 1
+
+    for rel, name, expect in MAP_CASES:
+        path = os.path.join(_EXTRACTED, *rel.split('/'))
+        if not os.path.isfile(path):
+            print(f'  SKIP {rel}: not extracted')
+            continue
+        cg = mappack.load(path).texture_cgfx()
+        tex = next((t for t in cg.textures() if t.get('ok') and t['name'] == name), None)
+        if not tex:
+            print(f'  FAIL {rel}: no ok texture {name!r}')
+            fails += 1
+            continue
+        rgba = ctr_texture.decode(tex['_raw'], tex['width'], tex['height'],
+                                  tex['format_id'])
+        r, g, b = avg_rgb(rgba, tex['width'] * tex['height'])
+        ok = (r > b) if expect == 'warm' else (b > r)
+        print(f"  {'OK  ' if ok else 'FAIL'} {rel} [{name} {tex['format']}] "
               f"avgRGB=({r},{g},{b}) expect {expect}")
         if not ok:
             fails += 1

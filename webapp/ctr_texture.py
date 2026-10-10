@@ -51,7 +51,18 @@ def _sat(v):
 def _etc1_tile(block):
     """block = 64-bit int (as read: high 32 = pixel-index bits, low 32 =
     the byte-swapped colour word). Returns list of 16 (r,g,b) tuples in
-    row-major 4x4 order."""
+    row-major 4x4 order.
+
+    Colour channel placement: the 3DS stores each ETC1 block as a
+    little-endian u64, so after the big-endian read above the standard
+    block's colour bytes come out reversed - R in bits 0..7, G in 8..15,
+    B in 16..23 (table/diff/flip stay in 24..31). SPICA's
+    TextureCompression.ETC1Tile names these the other way round (bits
+    16..23 "R") but also writes its tile out as B,G,R, so its final RGBA
+    buffer is correct; a straight port of its variable names into an RGBA
+    writer swapped red and blue (seas/skies came out orange). Verified on
+    map textures: MAP/MAPDATA/c01nout's sea `c01umi1` / sky `x08sora01`
+    average blue only with this placement (see test_texture_decode.py)."""
     block_low = (block >> 32) & 0xFFFFFFFF     # pixel index / MSB-LSB bits
     block_high = block & 0xFFFFFFFF            # colours + tables + flags
     flip = (block_high & 0x1000000) != 0
@@ -62,25 +73,25 @@ def _etc1_tile(block):
         return x - 256 if x & 0x80 else x
 
     if diff:
-        b1 = block_high & 0x0000F8
+        r1 = block_high & 0x0000F8
         g1 = (block_high & 0x00F800) >> 8
-        r1 = (block_high & 0xF80000) >> 16
-        b2 = (s8(b1 >> 3) + (s8((block_high & 0x000007) << 5) >> 5)) & 0xFF
+        b1 = (block_high & 0xF80000) >> 16
+        r2 = (s8(r1 >> 3) + (s8((block_high & 0x000007) << 5) >> 5)) & 0xFF
         g2 = (s8(g1 >> 3) + (s8((block_high & 0x000700) >> 3) >> 5)) & 0xFF
-        r2 = (s8(r1 >> 3) + (s8((block_high & 0x070000) >> 11) >> 5)) & 0xFF
-        b1 |= b1 >> 5; g1 |= g1 >> 5; r1 |= r1 >> 5
-        b2 = ((b2 << 3) | (b2 >> 2)) & 0xFF
-        g2 = ((g2 << 3) | (g2 >> 2)) & 0xFF
+        b2 = (s8(b1 >> 3) + (s8((block_high & 0x070000) >> 11) >> 5)) & 0xFF
+        r1 |= r1 >> 5; g1 |= g1 >> 5; b1 |= b1 >> 5
         r2 = ((r2 << 3) | (r2 >> 2)) & 0xFF
+        g2 = ((g2 << 3) | (g2 >> 2)) & 0xFF
+        b2 = ((b2 << 3) | (b2 >> 2)) & 0xFF
     else:
-        b1 = block_high & 0x0000F0
+        r1 = block_high & 0x0000F0
         g1 = (block_high & 0x00F000) >> 8
-        r1 = (block_high & 0xF00000) >> 16
-        b2 = (block_high & 0x00000F) << 4
+        b1 = (block_high & 0xF00000) >> 16
+        r2 = (block_high & 0x00000F) << 4
         g2 = (block_high & 0x000F00) >> 4
-        r2 = (block_high & 0x0F0000) >> 12
-        b1 |= b1 >> 4; g1 |= g1 >> 4; r1 |= r1 >> 4
-        b2 |= b2 >> 4; g2 |= g2 >> 4; r2 |= r2 >> 4
+        b2 = (block_high & 0x0F0000) >> 12
+        r1 |= r1 >> 4; g1 |= g1 >> 4; b1 |= b1 >> 4
+        r2 |= r2 >> 4; g2 |= g2 >> 4; b2 |= b2 >> 4
 
     t1 = (block_high >> 29) & 7
     t2 = (block_high >> 26) & 7
