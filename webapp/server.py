@@ -1030,6 +1030,8 @@ def parse_action_param() -> dict:
         elem_id = r[0x46]
         mp_cost = r[0x47]
         formula = r[0x4c]
+        # +0x51: bit0=会心判定あり(ActionCheckActor::checkActorKaishin が抽選する)
+        crit_flags = r[0x51]
         # +0x52: bit0=複数対象逓減(getMuchiDamage)の対象, bit4=status::isDoubleAction の対象
         gate_flags = r[0x52]
         resist_rank = r[0x56] >> 5
@@ -1051,6 +1053,7 @@ def parse_action_param() -> dict:
             'formula': formula,                         # +0x4c 計算式タイプ
             'formula_label': flabel[0] if flabel else '',
             'formula_label_en': flabel[1] if flabel else '',
+            'crit_flags': crit_flags,                   # +0x51
             'gate_flags': gate_flags,                   # +0x52
             'resist_rank': resist_rank,                 # +0x56 bit5-7
             'resist_rank_table': _ACTION_RESIST_RANK_TABLE.get(resist_rank),

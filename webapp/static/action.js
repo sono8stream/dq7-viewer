@@ -22,6 +22,9 @@ DQ7I18N.extend({
     'action.fTypeByteHint': '上位5bit=category(推定), 下位3bit=sub(推定)。action_type.datの行番号ではない模様',
     'action.fMpCost': 'MP消費',
     'action.fMpCostHint': '255 = MP全消費(例: メガザル)',
+    'action.fCrit': '会心フラグ',
+    'action.fCritHint': 'bit0=会心判定あり(ActionCheckActor::checkActorKaishinが抽選する。' +
+      '確認済み)。bit0が無い技(かみつけ等)は会心が出ない',
     'action.fGate': 'ゲートフラグ',
     'action.fGateHint': 'bit0=複数対象逓減(getMuchiDamage)の対象, bit4=2回攻撃装備時の' +
       '再計算(status::isDoubleAction)の対象。デコンパイルで確認',
@@ -67,6 +70,9 @@ DQ7I18N.extend({
     'action.fTypeByteHint': 'Upper 5 bits = category (estimated), lower 3 bits = sub (estimated). Does not appear to index dq7_action_type.dat rows',
     'action.fMpCost': 'MP cost',
     'action.fMpCostHint': '255 = consumes all remaining MP (e.g. Omniheal/Megazal)',
+    'action.fCrit': 'Critical-hit flags',
+    'action.fCritHint': 'bit0 = critical-hit roll enabled (ActionCheckActor::checkActorKaishin ' +
+      'only rolls when set; confirmed). Moves without bit0 (e.g. Bite) never land critical hits',
     'action.fGate': 'Gate flags',
     'action.fGateHint': 'bit0 = subject to multi-target falloff (getMuchiDamage), bit4 = ' +
       'subject to recalculation with double-attack equipment (status::isDoubleAction). ' +
@@ -205,6 +211,7 @@ function selectAction(idx) {
   h += row('+0x46', DQ7I18N.t('action.fElement'), `${a.element_id} = ${elabel(a)}`, DQ7I18N.t('action.fElementHint'));
   h += row('+0x47', DQ7I18N.t('action.fMpCost'), a.mp_cost, DQ7I18N.t('action.fMpCostHint'));
   h += row('+0x4c', DQ7I18N.t('action.fFormula'), `0x${a.formula.toString(16).padStart(2, '0')}` + (flabel ? ` = ${flabel}` : ''), DQ7I18N.t('action.fFormulaHint'));
+  h += row('+0x51', DQ7I18N.t('action.fCrit'), bits(a.crit_flags), DQ7I18N.t('action.fCritHint'));
   h += row('+0x52', DQ7I18N.t('action.fGate'), bits(a.gate_flags), DQ7I18N.t('action.fGateHint'));
   h += row('+0x56', DQ7I18N.t('action.fResistRank'), `${a.resist_rank}${rankTbl}`, DQ7I18N.t('action.fResistRankHint'));
   h += `</table>`;
