@@ -984,7 +984,9 @@ _ACTION_RESIST_RANK_TABLE = {
 }
 
 # +0x4c: 計算式タイプ。ActionEffectValue::getEffectValue が通常攻撃ダメージを
-# この値で加工する(主なもののみ)。
+# この値で加工する(主なもののみ)。0x1b〜0x30 の「レベル」は行動者ステータス+0x7a
+# (符号付きbyte)で、レベルと推定(しんくう波=0x1d がレベル依存という既知の仕様と一致)。
+# 「×90〜110%」等は status::getRandomVariation(値, 下幅, 上幅) による乱数幅。
 _ACTION_FORMULA_LABEL = {
     0: ('そのまま(威力ロール側で決まる)', 'unchanged (decided by the power roll)'),
     1: ('通常攻撃と同じ', 'same as a normal attack'),
@@ -1002,6 +1004,12 @@ _ACTION_FORMULA_LABEL = {
     0x0f: ('対象フラグ+0xf0eで×150%(+1)', 'x150% (+1) if target flag +0xf0e'),
     0x13: ('複数対象逓減(getMuchiDamage)', 'multi-target falloff (getMuchiDamage)'),
     0x14: ('通常攻撃×170%', 'normal attack x170%'),
+    0x1a: ('ATK×(64+rand(11))/64(防御無視)', 'ATK x(64+rand(11))/64 (ignores defense)'),
+    0x1b: ('レベル+rand(8)+1', 'level + rand(8) + 1'),
+    0x1d: ('min(レベル×2+50, 150)×90〜110%', 'min(level*2+50, 150) x90-110%'),
+    0x1e: ('min(レベル×3+10, 180)×85〜115%', 'min(level*3+10, 180) x85-115%'),
+    0x1f: ('レベル×2+25 ×90〜110%', 'level*2+25 x90-110%'),
+    0x30: ('レベル+5 ×90〜110%', 'level+5 x90-110%'),
     0x2f: ('対象フラグ+0xf10で×125%', 'x125% if target flag +0xf10'),
     0x33: ('通常攻撃×70%', 'normal attack x70%'),
 }
