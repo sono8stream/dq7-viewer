@@ -268,6 +268,7 @@ function disposeMap() {
     grp.clear();
   }
   collBox = null;
+  boxNodes = null;
 }
 
 function buildCollision(c) {
@@ -314,6 +315,33 @@ function rebuildMaterials() {
   applyTextures(buildGen);
 }
 
+const INSTANCE_MIN = 8;
+const _q = new THREE.Quaternion(), _e = new THREE.Euler(), _v = new THREE.Vector3(), _sv = new THREE.Vector3();
+// GNOD -> local matrix. Euler order: only Y rotations occur in the data seen
+// so far, so the X/Y/Z composition order is not yet confirmed.
+function nodeMatrix(n) {
+  _e.set(n.rotation[0], n.rotation[1], n.rotation[2], 'XYZ');
+  return new THREE.Matrix4().compose(_v.set(...n.translation), _q.setFromEuler(_e), _sv.set(...n.scale));
+}
+
+// Node boxes are only built when first needed (toggle / node focus): one
+// Box3Helper per node is wasted work for maps with thousands of trees.
+let boxNodes = null;
+function ensureBoxes() {
+  if (boxGroup.children.length || !boxNodes) return;
+  boxNodes.forEach((n, ni) => {
+    if (n.type !== 1) return;
+    const box = new THREE.Box3(new THREE.Vector3(...n.bboxMin), new THREE.Vector3(...n.bboxMax));
+    const hg = new THREE.Group();
+    hg.matrixAutoUpdate = false;
+    hg.matrix.copy(nodeMatrix(n));
+    hg.add(new THREE.Box3Helper(box, 0xffcc33));
+    hg.userData.nodeIndex = ni;
+    hg.visible = boxesMode;
+    boxGroup.add(hg);
+  });
+}
+
 function buildMap(r) {
   disposeMap();
   currentFile = r.file;
@@ -333,33 +361,51 @@ function buildMap(r) {
     partShapes.set(p.index, list);
   }
 
-  let nShapes = 0;
+  // Parts placed many times (trees: ~1800 in a generated DQ4 region, rocks,
+  // shallows) are drawn as one THREE.InstancedMesh per shape - one draw call
+  // instead of one per node, which keeps phones responsive. Rarely used
+  // parts keep one Group per node.
+  const byPart = new Map();
   r.nodes.forEach((n, ni) => {
     if (n.type !== 1) return;
-    const grp = new THREE.Group();
-    grp.name = n.name;
-    grp.position.set(...n.translation);
-    // Euler order: only Y rotations occur in the data seen so far, so
-    // the X/Y/Z composition order is not yet confirmed.
-    grp.rotation.set(n.rotation[0], n.rotation[1], n.rotation[2], 'XYZ');
-    grp.scale.set(...n.scale);
-    grp.userData.nodeIndex = ni;
-    for (const ps of (partShapes.get(n.part) || [])) {
-      const m = new THREE.Mesh(ps.geometry, ps.material);
-      ps.meshes.push(m);
-      grp.add(m);
-      nShapes++;
-    }
-    mapGroup.add(grp);
-
-    const box = new THREE.Box3(new THREE.Vector3(...n.bboxMin), new THREE.Vector3(...n.bboxMax));
-    const helper = new THREE.Box3Helper(box, 0xffcc33);
-    const hg = new THREE.Group();
-    hg.position.copy(grp.position); hg.rotation.copy(grp.rotation); hg.scale.copy(grp.scale);
-    hg.add(helper);
-    hg.userData.nodeIndex = ni;
-    boxGroup.add(hg);
+    if (!byPart.has(n.part)) byPart.set(n.part, []);
+    byPart.get(n.part).push(ni);
   });
+  let nShapes = 0;
+  for (const [part, nis] of byPart) {
+    const shapes = partShapes.get(part) || [];
+    if (nis.length >= INSTANCE_MIN) {
+      for (const ps of shapes) {
+        const im = new THREE.InstancedMesh(ps.geometry, ps.material, nis.length);
+        nis.forEach((ni, k) => im.setMatrixAt(k, nodeMatrix(r.nodes[ni])));
+        im.instanceMatrix.needsUpdate = true;
+        im.computeBoundingSphere();
+        im.computeBoundingBox();
+        im.userData.nodeIndices = nis;
+        ps.meshes.push(im);
+        mapGroup.add(im);
+        nShapes += nis.length;
+      }
+      continue;
+    }
+    for (const ni of nis) {
+      const n = r.nodes[ni];
+      const grp = new THREE.Group();
+      grp.name = n.name;
+      grp.matrixAutoUpdate = false;
+      grp.matrix.copy(nodeMatrix(n));
+      grp.userData.nodeIndex = ni;
+      for (const ps of shapes) {
+        const m = new THREE.Mesh(ps.geometry, ps.material);
+        ps.meshes.push(m);
+        grp.add(m);
+        nShapes++;
+      }
+      mapGroup.add(grp);
+    }
+  }
+  boxNodes = r.nodes;
+  if (boxesMode) ensureBoxes();
   buildCollision(r.collision);
   applyTextures(gen);
   frameAll();
@@ -509,6 +555,7 @@ function renderInfo(r) {
 function focusNode(ni, tr) {
   infoEl.querySelectorAll('tr.node-row.selected').forEach(e => e.classList.remove('selected'));
   if (tr) tr.classList.add('selected');
+  ensureBoxes();
   for (const hg of boxGroup.children) {
     const on = hg.userData.nodeIndex === ni;
     hg.children[0].material.color.set(on ? 0xff3366 : 0xffcc33);
@@ -531,6 +578,7 @@ toggle('btnTex', () => texMode, v => { texMode = v; }, rebuildMaterials);
 toggle('btnVColor', () => vcolMode, v => { vcolMode = v; }, rebuildMaterials);
 toggle('btnWire', () => wireframe, v => { wireframe = v; }, rebuildMaterials);
 toggle('btnBoxes', () => boxesMode, v => { boxesMode = v; }, () => {
+  if (boxesMode) ensureBoxes();
   for (const hg of boxGroup.children) { hg.visible = boxesMode; hg.children[0].material.color.set(0xffcc33); }
   boxGroup.visible = boxesMode;
 });
