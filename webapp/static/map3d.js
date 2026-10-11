@@ -56,6 +56,7 @@ if (I18N) {
       'map3d.colScale': 'スケール',
       'map3d.animGroup': 'a_ (アニメ部品)',
       'map3d.otherGroup': 'その他',
+      'map3d.genGroup': '生成マップ (generated_maps)',
     },
     en: {
       'map3d.tabFile': 'Files',
@@ -91,6 +92,7 @@ if (I18N) {
       'map3d.colScale': 'Scale',
       'map3d.animGroup': 'a_ (animated parts)',
       'map3d.otherGroup': 'Other',
+      'map3d.genGroup': 'Generated maps (generated_maps)',
     },
   });
 }
@@ -368,7 +370,8 @@ function buildMap(r) {
 let allFiles = [];
 let selected = null;
 
-function groupKey(name) {
+function groupKey(name, f) {
+  if (f && f.generated) return t('map3d.genGroup');
   if (name.startsWith('a_')) return t('map3d.animGroup');
   const m = name.match(/^([a-z]+\d\d[pn]?)/);
   if (m) return m[1];
@@ -388,7 +391,7 @@ function renderFileList() {
   let shown = 0;
   for (const f of allFiles) {
     if (q && !f.name.toLowerCase().includes(q)) continue;
-    const k = groupKey(f.name);
+    const k = groupKey(f.name, f);
     if (!groups.has(k)) groups.set(k, []);
     groups.get(k).push(f);
     shown++;
@@ -398,7 +401,7 @@ function renderFileList() {
   for (const [k, files] of groups) {
     const det = document.createElement('details');
     det.className = 'mapfile-group';
-    det.open = !!q && shown <= 300;
+    det.open = (!!q && shown <= 300) || files.some(f => f.generated);
     const sm = document.createElement('summary');
     sm.textContent = `${k} (${files.length})`;
     det.appendChild(sm);
