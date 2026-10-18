@@ -152,8 +152,153 @@ def _u16(buf, off):
     return buf[off] | (buf[off + 1] << 8)
 
 
+# ---- numpy fast path -----------------------------------------------------------
+# The per-pixel loops above take ~1-2 s for one 256x256 ETC1 texture (a map
+# pack has 30-60 of them). When numpy is installed the same decoding is done
+# on whole arrays instead (bit-for-bit identical; test_texture_decode.py
+# compares both paths); without numpy the loops above are used as before.
+try:
+    import numpy as _np
+except ImportError:          # optional dependency
+    _np = None
+
+
+def _np_tiles_to_image(px, width, height):
+    """px: (tilesY, tilesX, 8, 8, C) in-tile (y, x) order -> bytes RGBA, cropped."""
+    th, tw = px.shape[:2]
+    img = px.transpose(0, 2, 1, 3, 4).reshape(th * 8, tw * 8, px.shape[-1])
+    return _np.ascontiguousarray(img[:height, :width]).tobytes()
+
+
+def _np_decode_etc1(raw, width, height, alpha):
+    th, tw = (height + 7) // 8, (width + 7) // 8
+    n = th * tw * 4
+    bs = 16 if alpha else 8
+    buf = _np.frombuffer(raw, _np.uint8, n * bs).reshape(n, bs)
+    cw = buf[:, bs - 8:].copy().view('>u8')[:, 0].astype(_np.uint64)
+    bl = (cw >> _np.uint64(32)).astype(_np.int64)          # pixel index bits
+    bh = (cw & _np.uint64(0xFFFFFFFF)).astype(_np.int64)   # colours, tables, flags
+    flip = (bh & 0x1000000) != 0
+    diff = (bh & 0x2000000) != 0
+
+    def s8(x):
+        x = x & 0xFF
+        return _np.where(x & 0x80, x - 256, x)
+
+    # differential mode
+    dr1 = bh & 0xF8
+    dg1 = (bh & 0xF800) >> 8
+    db1 = (bh & 0xF80000) >> 16
+    dr2 = (s8(dr1 >> 3) + (s8((bh & 0x7) << 5) >> 5)) & 0xFF
+    dg2 = (s8(dg1 >> 3) + (s8((bh & 0x700) >> 3) >> 5)) & 0xFF
+    db2 = (s8(db1 >> 3) + (s8((bh & 0x70000) >> 11) >> 5)) & 0xFF
+    dr1, dg1, db1 = dr1 | dr1 >> 5, dg1 | dg1 >> 5, db1 | db1 >> 5
+    dr2, dg2, db2 = [((v << 3) | (v >> 2)) & 0xFF for v in (dr2, dg2, db2)]
+    # individual mode
+    ir1 = bh & 0xF0
+    ig1 = (bh & 0xF000) >> 8
+    ib1 = (bh & 0xF00000) >> 16
+    ir2 = (bh & 0xF) << 4
+    ig2 = (bh & 0xF00) >> 4
+    ib2 = (bh & 0xF0000) >> 12
+    ir1, ig1, ib1, ir2, ig2, ib2 = [v | v >> 4 for v in (ir1, ig1, ib1, ir2, ig2, ib2)]
+    c1 = _np.stack([_np.where(diff, d, i) for d, i in ((dr1, ir1), (dg1, ig1), (db1, ib1))], -1)
+    c2 = _np.stack([_np.where(diff, d, i) for d, i in ((dr2, ir2), (dg2, ig2), (db2, ib2))], -1)
+    t1 = (bh >> 29) & 7
+    t2 = (bh >> 26) & 7
+
+    y = _np.arange(4)[:, None]
+    x = _np.arange(4)[None, :]
+    idx = x * 4 + y                                          # (4, 4), [y][x]
+    sh_lo = _np.where(idx < 8, idx + 24, idx + 8)
+    sh_hi = _np.where(idx < 8, idx + 8, idx - 8)
+    blv = bl[:, None, None]
+    sel = ((blv >> sh_lo) & 1) + 2 * ((blv >> sh_hi) & 1)    # (n, 4, 4)
+    sub = _np.where(flip[:, None, None], (y >= 2)[None], (x >= 2)[None])
+    table = _np.where(sub, t2[:, None, None], t1[:, None, None])
+    d = _np.array(_ETC1_LUT, _np.int64)[table, sel]
+    base = _np.where(sub[..., None], c2[:, None, None, :], c1[:, None, None, :])
+    rgb = _np.clip(base + d[..., None], 0, 255).astype(_np.uint8)
+    if alpha:
+        ab = buf[:, :8].copy().view('<u8')[:, 0][:, None, None]
+        a = ((ab >> (idx * 4).astype(_np.uint64)) & _np.uint64(0xF)).astype(_np.uint8) * 17
+    else:
+        a = _np.full((n, 4, 4), 255, _np.uint8)
+    px = _np.concatenate([rgb, a[..., None]], -1)            # (n, 4, 4, 4)
+    # block order inside an 8x8 tile: (0,0) (4,0) (0,4) (4,4) as (x, y)
+    px = px.reshape(th, tw, 2, 2, 4, 4, 4).transpose(0, 1, 2, 4, 3, 5, 6).reshape(th, tw, 8, 8, 4)
+    return _np_tiles_to_image(px, width, height)
+
+
+_np_swz = None
+
+
+def _np_decode_tiled(raw, width, height, fmt_id):
+    global _np_swz
+    if _np_swz is None:
+        _np_swz = _np.argsort(_np.array(_SWIZZLE))   # in-tile (y*8+x) -> storage index
+    th, tw = (height + 7) // 8, (width + 7) // 8
+    n = th * tw * 64
+    f = fmt_id
+    if f in (10, 11):                                # 4 bpp, low nibble first
+        b = _np.frombuffer(raw, _np.uint8, (n + 1) // 2)
+        v = _np.stack([b & 0xF, b >> 4], -1).reshape(-1)[:n]
+        v = (v << 4) | v
+        full = _np.full(n, 255, _np.uint8)
+        rgba = (_np.stack([v, v, v, full], -1) if f == 10 else
+                _np.stack([full, full, full, v], -1))
+    else:
+        inc = _BPP[f] // 8
+        b = _np.frombuffer(raw, _np.uint8, n * inc).reshape(n, inc)
+        full = _np.full(n, 255, _np.uint8)
+        if inc == 2:
+            v = b[:, 0].astype(_np.uint16) | (b[:, 1].astype(_np.uint16) << 8)
+        if f == 0:
+            rgba = b[:, ::-1]
+        elif f == 1:
+            rgba = _np.stack([b[:, 2], b[:, 1], b[:, 0], full], -1)
+        elif f == 2:
+            r, g, bb = (v >> 11) & 0x1F, (v >> 6) & 0x1F, (v >> 1) & 0x1F
+            rgba = _np.stack([(r << 3) | (r >> 2), (g << 3) | (g >> 2), (bb << 3) | (bb >> 2),
+                              _np.where(v & 1, 255, 0)], -1).astype(_np.uint8)
+        elif f == 3:
+            r, g, bb = (v >> 11) & 0x1F, (v >> 5) & 0x3F, v & 0x1F
+            rgba = _np.stack([(r << 3) | (r >> 2), (g << 2) | (g >> 4), (bb << 3) | (bb >> 2),
+                              full], -1).astype(_np.uint8)
+        elif f == 4:
+            c = [(v >> s) & 0xF for s in (12, 8, 4, 0)]
+            rgba = _np.stack([(k << 4) | k for k in c], -1).astype(_np.uint8)
+        elif f == 5:
+            rgba = _np.stack([b[:, 1], b[:, 1], b[:, 1], b[:, 0]], -1)
+        elif f == 6:
+            rgba = _np.stack([b[:, 1], b[:, 0], _np.zeros(n, _np.uint8), full], -1)
+        elif f == 7:
+            rgba = _np.stack([b[:, 0], b[:, 0], b[:, 0], full], -1)
+        elif f == 8:
+            rgba = _np.stack([full, full, full, b[:, 0]], -1)
+        elif f == 9:
+            w = b[:, 0]
+            lum = (w >> 4) | (w & 0xF0)
+            a = ((w << 4) | (w & 0x0F)).astype(_np.uint8)
+            rgba = _np.stack([lum, lum, lum, a], -1)
+    rgba = _np.asarray(rgba, _np.uint8).reshape(th, tw, 64, 4)[:, :, _np_swz].reshape(th, tw, 8, 8, 4)
+    return _np_tiles_to_image(rgba, width, height)
+
+
 def decode(raw, width, height, fmt_id):
     """-> bytes of length width*height*4 (RGBA, row 0 = top)."""
+    if _np is not None:
+        try:
+            if fmt_id in (12, 13):
+                return _np_decode_etc1(raw, width, height, fmt_id == 13)
+            return _np_decode_tiled(raw, width, height, fmt_id)
+        except ValueError:       # raw shorter than the image: keep the loops' behaviour
+            pass
+    return decode_py(raw, width, height, fmt_id)
+
+
+def decode_py(raw, width, height, fmt_id):
+    """Pure-Python decoder (reference for the numpy path)."""
     if fmt_id == 12:
         return _decode_etc1(raw, width, height, False)
     if fmt_id == 13:
@@ -229,7 +374,7 @@ def to_png(raw, width, height, fmt_id):
     img = Image.frombytes('RGBA', (width, height), rgba)
     import io as _io
     buf = _io.BytesIO()
-    img.save(buf, 'PNG')
+    img.save(buf, 'PNG', compress_level=1)   # speed over size: served locally
     return buf.getvalue()
 
 
@@ -282,5 +427,5 @@ def dmp_to_png(data):
         img = img.crop((0, 0, w, h))
     import io as _io
     buf = _io.BytesIO()
-    img.save(buf, 'PNG')
+    img.save(buf, 'PNG', compress_level=1)   # speed over size: served locally
     return buf.getvalue()

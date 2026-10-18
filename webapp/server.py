@@ -1635,11 +1635,53 @@ def parse_model_file(rel: str) -> dict:
     return res
 
 
+class _ByteCache:
+    """Thread-safe LRU of bytes values, bounded by total size. Keys carry the
+    source file's mtime/size, so an edited or regenerated file is decoded
+    again instead of being served stale."""
+
+    def __init__(self, max_bytes):
+        import collections
+        self._d = collections.OrderedDict()
+        self._max = max_bytes
+        self._total = 0
+        self._lock = threading.Lock()
+
+    @staticmethod
+    def file_key(full, *extra):
+        st = os.stat(full)
+        return (os.path.abspath(full), st.st_mtime_ns, st.st_size) + extra
+
+    def get_or_make(self, key, make):
+        with self._lock:
+            v = self._d.get(key)
+            if v is not None:
+                self._d.move_to_end(key)
+                return v
+        v = make()                 # outside the lock: decoding is the slow part
+        if v is None:
+            return None
+        with self._lock:
+            if key not in self._d:
+                self._d[key] = v
+                self._total += len(v)
+                while self._total > self._max and len(self._d) > 1:
+                    _, old = self._d.popitem(last=False)
+                    self._total -= len(old)
+        return v
+
+
+# Decoded texture PNGs (a map pack has 30-60 textures, each decoded on every
+# page load before) and gzipped map JSON (several MB, rebuilt per request).
+_PNG_CACHE = _ByteCache(96 * 1024 * 1024)
+_MAP_JSON_CACHE = _ByteCache(48 * 1024 * 1024)
+
+
 def model_texture_png(rel: str, name: str) -> bytes:
     """Decode one embedded TXOB of the model to PNG bytes (or None)."""
     full = _safe_model_path(rel)
-    cg = bcmdl.get_cgfx(full)
-    return cg.texture_png(name)
+    return _PNG_CACHE.get_or_make(_ByteCache.file_key(full, 'model', name),
+                                  lambda: bcmdl.get_cgfx(full).texture_png(name))
 
 
 def model_animation(rel: str, name: str) -> dict:
@@ -1711,7 +1753,18 @@ def parse_map_file(rel: str) -> dict:
 
 
 def map_texture_png(rel: str, name: str) -> bytes:
-    return mappack.texture_png(_safe_map_path(rel), name)
+    full = _safe_map_path(rel)
+    return _PNG_CACHE.get_or_make(_ByteCache.file_key(full, 'map', name),
+                                  lambda: mappack.texture_png(full, name))
+
+
+def map_json_gz(rel: str) -> bytes:
+    """parse_map_file(rel) as gzipped JSON, cached per file version."""
+    full = _safe_map_path(rel)
+    return _MAP_JSON_CACHE.get_or_make(
+        _ByteCache.file_key(full, 'json'),
+        lambda: gzip.compress(json.dumps(parse_map_file(rel), ensure_ascii=False).encode('utf-8'),
+                              compresslevel=5))
 
 
 def parse_fpt_full(filename: str) -> dict:
@@ -3634,7 +3687,16 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if parsed.path == '/api/map':
             rel = (qs.get('file') or [''])[0]
             try:
-                self._send_json(parse_map_file(rel))
+                if 'gzip' in (self.headers.get('Accept-Encoding') or ''):
+                    body = map_json_gz(rel)
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/json; charset=utf-8')
+                    self.send_header('Content-Encoding', 'gzip')
+                    self.send_header('Content-Length', str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                else:
+                    self._send_json(parse_map_file(rel))
             except FileNotFoundError:
                 self._send_json({'error': 'not found'}, status=404)
             except ValueError as e:

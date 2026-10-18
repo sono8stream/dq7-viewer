@@ -78,6 +78,10 @@ python3 server.py
 
 See `webapp/server.py` for startup options and the API.
 
+The 3D views need Pillow (texture PNGs). Installing numpy (`pip install numpy`)
+is optional but makes texture decoding about 10x faster (a map's textures load in
+~2 s instead of ~12 s on a phone); without it a pure-Python decoder is used.
+
 ## Format documentation index
 
 `docs/formats/` is split into subfolders that mirror the game's main data
