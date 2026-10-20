@@ -157,6 +157,21 @@ GfxFaceDescriptor:
     world行列で position/normal を変換。
   - `skinning == 2`(smooth): 複数ボーンのworld行列を上記の影響(index,weight)で
     ブレンドして変換。
+- ボーン`+0x2C` Rotation(f32×3、ラジアンのオイラー角XYZ)、`+0xD4`
+  BillboardMode(u32): `0` Off、`2` World、`3` WorldViewpoint、`4` Screen、
+  `5` ScreenViewpoint、`6` YAxial、`7` YAxialViewpoint(`1`は欠番)。
+  Off以外のボーンに付いた頂点は、描画時にカメラの方へ向ける。マップの木は
+  葉のカード(ボーン名`...ha...`、モード`3`か`5`)にこれを使っており、
+  バインドポーズのまま描くとカードが真横や幹の裏を向いて、葉の無い木に見える。
+  向け方(ビュー空間、SPICAの描画と同じ):
+  - Z: Viewpoint系(`3`/`5`/`7`)はボーンからカメラ位置への向き、
+    それ以外(`2`/`4`/`6`)は視線の軸。
+  - Y: World系・YAxial系はモデルの上方向、Screen系はボーン自身の上方向
+    (Rotationを+Yに掛けたもの、行ベクトルで`Rx * Ry * Rz`)を画面上で。
+  - X = Y × Z、その後 Y = Z × X。
+  - 頂点はボーン空間に戻し(ボーンのバインドポーズworld行列の逆)、
+    その行列のスケール(列ベクトルの長さ)を掛け、[X Y Z]で回してボーンの
+    位置に置く。
 
 ## テクスチャ(TXOB)
 

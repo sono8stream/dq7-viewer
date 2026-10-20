@@ -159,7 +159,102 @@ function animate() {
   requestAnimationFrame(animate);
   resize();
   controls.update();
+  updateBillboards();
   renderer.render(scene, camera);
+}
+
+// ---- billboard bones -----------------------------------------------------------
+// Vertices bound to a bone whose GfxBone BillboardMode (+0xD4) is not Off turn
+// to the camera at draw time (map trees: the leaf cards). Same basis as
+// SPICA.Rendering's Mesh: Z = toward the camera position for the Viewpoint
+// modes (3/5/7) or the view axis (2/4/6); Y = the model's up (World/YAxial)
+// or the bone's own Euler-rotated up on the screen (Screen 4/5); X = Y x Z,
+// then Y = Z x X. The geometry holds the vertices in bone space, scaled by
+// the bone's scale (see splitBillboards); each frame every instance gets
+// [X Y Z] * node scale at the bone's position.
+let billboards = [];   // {mesh, mode, pivot: Vector3 (model), upView: Vector3|null, nodes: [Matrix4]}
+const _bbP = new THREE.Vector3(), _bbX = new THREE.Vector3(), _bbY = new THREE.Vector3(), _bbZ = new THREE.Vector3();
+const _bbR = new THREE.Vector3(), _bbU = new THREE.Vector3(), _bbB = new THREE.Vector3(), _bbS = new THREE.Vector3();
+const _bbM = new THREE.Matrix4();
+function updateBillboards() {
+  if (!billboards.length) return;
+  camera.updateMatrixWorld();
+  _bbR.setFromMatrixColumn(camera.matrixWorld, 0).normalize();
+  _bbU.setFromMatrixColumn(camera.matrixWorld, 1).normalize();
+  _bbB.setFromMatrixColumn(camera.matrixWorld, 2).normalize();   // view +Z (toward the viewer)
+  for (const bb of billboards) {
+    bb.nodes.forEach((nm, k) => {
+      _bbP.copy(bb.pivot).applyMatrix4(nm);
+      if (bb.mode === 3 || bb.mode === 5 || bb.mode === 7) _bbZ.copy(camera.position).sub(_bbP).normalize();
+      else _bbZ.copy(_bbB);
+      if (bb.upView) _bbY.set(0, 0, 0).addScaledVector(_bbR, bb.upView.x).addScaledVector(_bbU, bb.upView.y).addScaledVector(_bbB, bb.upView.z);
+      else _bbY.setFromMatrixColumn(nm, 1).normalize();
+      _bbX.crossVectors(_bbY, _bbZ).normalize();
+      _bbY.crossVectors(_bbZ, _bbX).normalize();
+      _bbS.setFromMatrixScale(nm);
+      const sc = (_bbS.x + _bbS.y + _bbS.z) / 3;
+      _bbM.makeBasis(_bbX.multiplyScalar(sc), _bbY.multiplyScalar(sc), _bbZ.multiplyScalar(sc)).setPosition(_bbP);
+      bb.mesh.setMatrixAt(k, _bbM);
+    });
+    bb.mesh.instanceMatrix.needsUpdate = true;
+  }
+}
+
+// Split a shape into its non-billboard part and one sub-shape per billboard
+// bone, the latter moved to bone space: local = inverse(bind world) * p,
+// times the bone's scale (column norms of the bind world 3x3).
+function splitBillboards(s) {
+  const bbb = s.billboardBones;
+  if (!bbb || !s.skinIndex || !s.indices) return null;
+  const nv = s.positions.length / 3;
+  const boneOf = new Int32Array(nv);
+  for (let i = 0; i < nv; i++) boneOf[i] = s.skinIndex[i * 4];
+  const subs = new Map();   // bone -> triangle list
+  const rest = [];
+  for (let t = 0; t < s.indices.length; t += 3) {
+    const a = s.indices[t], b = s.indices[t + 1], c = s.indices[t + 2];
+    const k = String(boneOf[a]);
+    if (bbb[k] && boneOf[b] === boneOf[a] && boneOf[c] === boneOf[a]) {
+      if (!subs.has(k)) subs.set(k, []);
+      subs.get(k).push(a, b, c);
+    } else rest.push(a, b, c);
+  }
+  const pick = (tris, xform) => {
+    const map = new Map(), out = { ...s, positions: [], indices: [], uvs: s.uvs ? [] : undefined,
+      uvs1: s.uvs1 ? [] : undefined, uvs2: s.uvs2 ? [] : undefined, colors: s.colors ? [] : undefined };
+    for (const v of tris) {
+      if (!map.has(v)) {
+        map.set(v, map.size);
+        const p = xform(s.positions[v * 3], s.positions[v * 3 + 1], s.positions[v * 3 + 2]);
+        out.positions.push(p[0], p[1], p[2]);
+        for (const key of ['uvs', 'uvs1', 'uvs2']) if (out[key]) out[key].push(s[key][v * 2], s[key][v * 2 + 1]);
+        if (out.colors) out.colors.push(s.colors[v * 4], s.colors[v * 4 + 1], s.colors[v * 4 + 2], s.colors[v * 4 + 3]);
+      }
+      out.indices.push(map.get(v));
+    }
+    return out;
+  };
+  const parts = { rest: rest.length ? pick(rest, (x, y, z) => [x, y, z]) : null, bones: [] };
+  for (const [k, tris] of subs) {
+    const m = bbb[k].world;   // row-major 3x4: x' = x*m0 + y*m1 + z*m2 + m3 ...
+    const A = new THREE.Matrix3().set(m[0], m[1], m[2], m[4], m[5], m[6], m[8], m[9], m[10]);
+    const sc = [Math.hypot(m[0], m[4], m[8]), Math.hypot(m[1], m[5], m[9]), Math.hypot(m[2], m[6], m[10])];
+    const inv = A.clone().invert();
+    const v = new THREE.Vector3();
+    const sub = pick(tris, (x, y, z) => {
+      v.set(x - m[3], y - m[7], z - m[11]).applyMatrix3(inv);
+      return [v.x * sc[0], v.y * sc[1], v.z * sc[2]];
+    });
+    let upView = null;
+    if (bbb[k].mode === 4 || bbb[k].mode === 5) {
+      // SPICA: BoneMtx = Rx * Ry * Rz (row vectors) -> its Y row
+      const r = bbb[k].rotation || [0, 0, 0];
+      const e = new THREE.Euler(r[0], r[1], r[2], 'ZYX');
+      upView = new THREE.Vector3(0, 1, 0).applyEuler(e);
+    }
+    parts.bones.push({ shape: sub, mode: bbb[k].mode, pivot: new THREE.Vector3(m[3], m[7], m[11]), upView });
+  }
+  return parts;
 }
 
 function frameBox(box) {
@@ -352,11 +447,20 @@ function buildMap(r) {
   scene.background = new THREE.Color(DEFAULT_BG);
   if (bg && bg.length >= 3) scene.background.setRGB(bg[0], bg[1], bg[2], THREE.SRGBColorSpace);
 
+  billboards = [];
   for (const p of r.parts) {
     const list = [];
     for (const s of p.shapes) {
       if (!s.positions || s.positions.length < 9) continue;
-      list.push({ shape: s, geometry: buildPartGeometry(s), material: makeMaterial(s), meshes: [] });
+      const split = splitBillboards(s);
+      if (!split) {
+        list.push({ shape: s, geometry: buildPartGeometry(s), material: makeMaterial(s), meshes: [] });
+        continue;
+      }
+      if (split.rest) list.push({ shape: split.rest, geometry: buildPartGeometry(split.rest), material: makeMaterial(s), meshes: [] });
+      for (const b of split.bones) {
+        list.push({ shape: b.shape, geometry: buildPartGeometry(b.shape), material: makeMaterial(s), meshes: [], billboard: b });
+      }
     }
     partShapes.set(p.index, list);
   }
@@ -374,8 +478,21 @@ function buildMap(r) {
   let nShapes = 0;
   for (const [part, nis] of byPart) {
     const shapes = partShapes.get(part) || [];
+    for (const ps of shapes) {
+      if (!ps.billboard) continue;
+      // billboard sub-shapes: always instanced, matrices set each frame
+      const im = new THREE.InstancedMesh(ps.geometry, ps.material, nis.length);
+      im.frustumCulled = false;
+      im.userData.nodeIndices = nis;
+      ps.meshes.push(im);
+      mapGroup.add(im);
+      billboards.push({ mesh: im, mode: ps.billboard.mode, pivot: ps.billboard.pivot, upView: ps.billboard.upView,
+                        nodes: nis.map(ni => nodeMatrix(r.nodes[ni])) });
+      nShapes += nis.length;
+    }
     if (nis.length >= INSTANCE_MIN) {
       for (const ps of shapes) {
+        if (ps.billboard) continue;
         const im = new THREE.InstancedMesh(ps.geometry, ps.material, nis.length);
         nis.forEach((ni, k) => im.setMatrixAt(k, nodeMatrix(r.nodes[ni])));
         im.instanceMatrix.needsUpdate = true;
@@ -396,6 +513,7 @@ function buildMap(r) {
       grp.matrix.copy(nodeMatrix(n));
       grp.userData.nodeIndex = ni;
       for (const ps of shapes) {
+        if (ps.billboard) continue;
         const m = new THREE.Mesh(ps.geometry, ps.material);
         ps.meshes.push(m);
         grp.add(m);

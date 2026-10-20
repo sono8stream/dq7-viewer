@@ -312,6 +312,11 @@ class Cgfx:
     #   +0x44 LocalTransform  Matrix3x4 (48)
     #   +0x74 WorldTransform  Matrix3x4 (48)   <- bind pose, what we need
     #   +0xA4 InvWorldTransform Matrix3x4 (48)
+    #   +0xD4  BillboardMode u32 (SPICA GfxBillboardMode: 0 Off, 2 World,
+    #          3 WorldViewpoint, 4 Screen, 5 ScreenViewpoint, 6 YAxial,
+    #          7 YAxialViewpoint; 1 is unused) - map trees' leaf bones ("...ha")
+    #          are 3 or 5: the leaf cards turn to the camera at draw time
+    #   +0xD8  MetaData dict
     # Matrix3x4 on disk = 12 f32 in the order M11,M21,M31,M41, M12,M22,
     # M32,M42, M13,M23,M33,M43 (row-major 3x4 affine, translation in the
     # 4th column): x' = x*f0 + y*f1 + z*f2 + f3  (and f4..7 -> y', f8..11 -> z').
@@ -388,6 +393,8 @@ class Cgfx:
             return self._skel_cache
         local, parent = {}, {}
         self._skel_names = {}
+        self._skel_billboard = {}
+        self._skel_rot = {}
         for m in self._model_offsets():
             if self.u32(m) != 0x40000092:          # not skeletal
                 continue
@@ -404,6 +411,8 @@ class Cgfx:
                 local[idx] = struct.unpack_from('<12f', self.d, bo + 0x44)
                 parent[idx] = self.i32(bo + 0x0C)
                 self._skel_names[idx] = self.cstr(self.ref(bo)) or f'bone{idx}'
+                self._skel_billboard[idx] = self.u32(bo + 0xD4)
+                self._skel_rot[idx] = struct.unpack_from('<3f', self.d, bo + 0x2C)
 
         world = {}
 
@@ -690,6 +699,19 @@ class Cgfx:
         if out['skinned']:
             out['skinIndex'] = out_skin_idx
             out['skinWeight'] = out_skin_weight
+            # billboard bones (GfxBone +0xD4): the vertices bound to them are
+            # turned to the camera at draw time. For each, its bind-pose world
+            # matrix (to take the vertices back to bone space: rigid submeshes
+            # were transformed by it above), its BillboardMode and its Euler
+            # rotation (the Screen modes' up axis).
+            bb = {}
+            for gi in set(out_skin_idx[0::4]):
+                mode = getattr(self, '_skel_billboard', {}).get(gi, 0)
+                if mode and gi in bones:
+                    bb[str(gi)] = {'mode': mode, 'world': list(bones[gi]),
+                                   'rotation': list(self._skel_rot.get(gi, (0.0, 0.0, 0.0)))}
+            if bb:
+                out['billboardBones'] = bb
         return out
 
     def geometry(self):

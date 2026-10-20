@@ -172,6 +172,23 @@ The sum of weights is always ≈1.0.
     is no attribute).
   - `skinning == 2` (smooth): blend the world matrices of multiple bones
     using the influence (index, weight) pairs above.
+- Bone `+0x2C` Rotation (3 f32, Euler XYZ in radians), `+0xD4`
+  BillboardMode (u32): `0` Off, `2` World, `3` WorldViewpoint, `4` Screen,
+  `5` ScreenViewpoint, `6` YAxial, `7` YAxialViewpoint (`1` is unused).
+  Vertices bound to a bone whose mode is not Off are turned to the camera
+  at draw time. Map trees use this for their leaf cards (bones named
+  `...ha...`, modes `3` or `5`); drawn with the bind pose only, the cards
+  stay edge-on or behind the trunk and the tree looks bare.
+  Orientation (in view space; same as SPICA's renderer):
+  - Z: the Viewpoint modes (`3`/`5`/`7`) point from the bone toward the
+    camera position; the others (`2`/`4`/`6`) use the view axis.
+  - Y: World/YAxial modes use the model's up axis; Screen modes use the
+    bone's own up (its Rotation applied to +Y, as `Rx * Ry * Rz` in
+    row-vector order) on the screen.
+  - X = Y × Z, then Y = Z × X.
+  - The vertex goes back to bone space (inverse of the bone's bind-pose
+    world matrix), is scaled by that matrix's scale (column norms), rotated
+    by [X Y Z] and placed at the bone's position.
 
 ## Textures (TXOB)
 
