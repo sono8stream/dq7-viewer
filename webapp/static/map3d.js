@@ -189,7 +189,9 @@ function updateBillboards() {
       else _bbZ.copy(_bbB);
       if (bb.upView) _bbY.set(0, 0, 0).addScaledVector(_bbR, bb.upView.x).addScaledVector(_bbU, bb.upView.y).addScaledVector(_bbB, bb.upView.z);
       else _bbY.setFromMatrixColumn(nm, 1).normalize();
-      _bbX.crossVectors(_bbY, _bbZ).normalize();
+      _bbX.crossVectors(_bbY, _bbZ);
+      if (_bbX.lengthSq() < 1e-12) _bbX.crossVectors(_bbU, _bbZ);   // looking along the up axis (from straight above)
+      _bbX.normalize();
       _bbY.crossVectors(_bbZ, _bbX).normalize();
       _bbS.setFromMatrixScale(nm);
       const sc = (_bbS.x + _bbS.y + _bbS.z) / 3;
