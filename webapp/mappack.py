@@ -308,11 +308,24 @@ def _round_list(xs, nd=4):
     return [round(v, nd) for v in xs] if xs else xs
 
 
-def read_map(path):
+def read_map(path, part=None):
     """path -> {nodes, parts, textures, params, chunks, fileTables, missingTextures}.
-    Each referenced part's geometry is sent once; nodes instance it."""
+    Each referenced part's geometry is sent once; nodes instance it.
+
+    `part` (a part name from the FILE/NRML table): only that part, as one node
+    at the origin with no rotation, keeping the scale of its first placement
+    in this pack (for looking at a single part, e.g. from the parts index)."""
     mp = load(path)
     nodes = mp.nodes()
+    if part is not None:
+        names = mp.file_tables().get('NRML', {}).get('names', [])
+        if part not in names:
+            raise ValueError(f'no part {part!r} in this pack')
+        idx = names.index(part)
+        placed = [n for n in nodes if n['type'] == 1 and n['part'] == idx]
+        if not placed:
+            raise ValueError(f'part {part!r} is not placed by any node')
+        nodes = [dict(placed[0], translation=[0.0, 0.0, 0.0], rotation=[0.0, 0.0, 0.0])]
     used = sorted({n['part'] for n in nodes if n['type'] == 1 and n['part'] >= 0})
     tex_names = set(mp.texture_names())
     parts = []
@@ -347,9 +360,27 @@ def read_map(path):
         'params': mp.params(),
         'chunks': mp.chunk_summary(),
         'fileTables': mp.file_tables(),
-        'collision': mp.collision(),
+        'collision': None if part is not None else mp.collision(),
     }
 
 
 def texture_png(path, name):
     return load(path).texture_png(name)
+
+
+def part_placements(path):
+    """{part name: [placement count, size (bbox x node scale of the first
+    placement)]} for one pack, from GNOD + FILE/NRML only (no geometry)."""
+    mp = load(path)
+    names = mp.file_tables().get('NRML', {}).get('names', [])
+    out = {}
+    for n in mp.nodes():
+        if n['type'] != 1 or not (0 <= n['part'] < len(names)):
+            continue
+        e = out.get(names[n['part']])
+        if e is None:
+            size = [round(abs((hi - lo) * s), 3) for lo, hi, s in zip(n['bboxMin'], n['bboxMax'], n['scale'])]
+            out[names[n['part']]] = [1, size]
+        else:
+            e[0] += 1
+    return out

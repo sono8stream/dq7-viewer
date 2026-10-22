@@ -57,6 +57,17 @@ if (I18N) {
       'map3d.animGroup': 'a_ (アニメ部品)',
       'map3d.otherGroup': 'その他',
       'map3d.genGroup': '生成マップ (generated_maps)',
+      'map3d.modeMaps': 'マップ',
+      'map3d.modeParts': '部品',
+      'map3d.partSearchPlaceholder': '部品名で絞り込み（例: tubo, wd0, kb）...',
+      'map3d.partsBuilding': '部品の索引を作成中... {done} / {total} パック（初回のみ、数分）',
+      'map3d.partsCount': '{shown} / {total} 部品',
+      'map3d.partsMore': 'ほか {n} 件。名前で絞り込んでください',
+      'map3d.partUses': '{n} 回配置',
+      'map3d.partPacks': 'この部品を置いているパック（{n}）',
+      'map3d.partPackHint': 'パック名: その部品を表示 / 「マップ」: マップ全体を開く',
+      'map3d.openMap': 'マップ',
+      'map3d.partSize': '大きさ (x, y, z)',
     },
     en: {
       'map3d.tabFile': 'Files',
@@ -93,6 +104,17 @@ if (I18N) {
       'map3d.animGroup': 'a_ (animated parts)',
       'map3d.otherGroup': 'Other',
       'map3d.genGroup': 'Generated maps (generated_maps)',
+      'map3d.modeMaps': 'Maps',
+      'map3d.modeParts': 'Parts',
+      'map3d.partSearchPlaceholder': 'Filter by part name (e.g. tubo, wd0, kb)...',
+      'map3d.partsBuilding': 'Building the parts index... {done} / {total} packs (first time only, a few minutes)',
+      'map3d.partsCount': '{shown} / {total} parts',
+      'map3d.partsMore': '{n} more - narrow the filter',
+      'map3d.partUses': 'placed {n}x',
+      'map3d.partPacks': 'Packs placing this part ({n})',
+      'map3d.partPackHint': 'pack name: show the part from it / "map": open the whole map',
+      'map3d.openMap': 'map',
+      'map3d.partSize': 'Size (x, y, z)',
     },
   });
 }
@@ -551,7 +573,85 @@ async function loadFiles() {
   renderFileList();
 }
 
+// ---- parts mode: every part placed by any pack, looked at one at a time ------------
+let listMode = 'maps';
+let partsIndex = null;
+let partsPoll = null;
+const PARTS_SHOWN = 300;
+
+async function loadPartsIndex() {
+  const res = await fetch('/api/map_parts');
+  const r = await res.json();
+  if (r.state === 'ready') {
+    partsIndex = r.parts;
+    renderFileList();
+    return;
+  }
+  listInner.innerHTML = r.state === 'error'
+    ? `<div class="empty">${esc(t('map3d.error'))}: ${esc(r.error || '')}</div>`
+    : `<div class="empty">${esc(fmt(t('map3d.partsBuilding'), { done: r.done, total: r.total || '?' }))}</div>`;
+  if (r.state === 'building' && listMode === 'parts') {
+    clearTimeout(partsPoll);
+    partsPoll = setTimeout(() => loadPartsIndex().catch(() => {}), 3000);
+  }
+}
+
+function renderPartList() {
+  const q = searchBox.value.trim().toLowerCase();
+  const hits = partsIndex.filter(e => !q || e.name.toLowerCase().includes(q));
+  statusEl.textContent = fmt(t('map3d.partsCount'), { shown: hits.length, total: partsIndex.length });
+  listInner.innerHTML = '';
+  for (const e of hits.slice(0, PARTS_SHOWN)) {
+    const row = document.createElement('div');
+    row.className = 'mapfile-row' + (selected === 'part:' + e.name ? ' selected' : '');
+    row.innerHTML = `${esc(e.name)}<span class="size">${esc(fmt(t('map3d.partUses'), { n: e.uses }))}</span>`;
+    row.onclick = () => selectPart(e, e.packs[0][0], row);
+    listInner.appendChild(row);
+  }
+  if (hits.length > PARTS_SHOWN) {
+    const more = document.createElement('div');
+    more.className = 'empty';
+    more.textContent = fmt(t('map3d.partsMore'), { n: hits.length - PARTS_SHOWN });
+    listInner.appendChild(more);
+  }
+}
+
+async function selectPart(e, pack, row) {
+  selected = 'part:' + e.name;
+  listInner.querySelectorAll('.mapfile-row.selected').forEach(x => x.classList.remove('selected'));
+  if (row) row.classList.add('selected');
+  mstatus.textContent = `${e.name} (${pack}): ${t('map3d.loading')}`;
+  if (isMobile()) showPane('mapViewport');
+  let r;
+  try {
+    const res = await fetch(`/api/map?file=${encodeURIComponent(pack)}&part=${encodeURIComponent(e.name)}`);
+    r = await res.json();
+    if (r.error) throw new Error(r.error);
+  } catch (err) {
+    mstatus.textContent = `${t('map3d.error')}: ${err.message}`;
+    return;
+  }
+  if (selected !== 'part:' + e.name) return;
+  lastResult = r;
+  const nShapes = buildMap(r);
+  mstatus.textContent = `${e.name}  ${pack}  ` + fmt(t('map3d.summary'), { n: 1, p: r.parts.length, s: nShapes });
+  renderInfo(r, e);
+}
+
+function setListMode(mode) {
+  listMode = mode;
+  document.querySelectorAll('#mapModeBtns button').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+  searchBox.placeholder = t(mode === 'parts' ? 'map3d.partSearchPlaceholder' : 'map3d.searchPlaceholder');
+  if (mode === 'parts' && !partsIndex) {
+    loadPartsIndex().catch(err => { listInner.textContent = `${t('map3d.error')}: ${err.message}`; });
+    return;
+  }
+  renderFileList();
+}
+document.querySelectorAll('#mapModeBtns button').forEach(b => b.addEventListener('click', () => setListMode(b.dataset.mode)));
+
 function renderFileList() {
+  if (listMode === 'parts') { if (partsIndex) renderPartList(); return; }
   const q = searchBox.value.trim().toLowerCase();
   const groups = new Map();
   let shown = 0;
@@ -622,9 +722,21 @@ async function selectMap(path, row) {
 
 function fmtVec(v, d = 2) { return v.map(x => (+x).toFixed(d)).join(', '); }
 
-function renderInfo(r) {
+function renderInfo(r, partEntry) {
   const H = [];
-  H.push(`<div>${esc(r.file)}</div>`);
+  H.push(`<div>${esc(r.file)}${r.part ? ' / ' + esc(r.part) : ''}</div>`);
+  if (partEntry) {
+    // which packs place this part: tap a pack to see its copy (same name is
+    // normally the same model, but not guaranteed), or open that whole map
+    H.push(`<div>${esc(t('map3d.partSize'))}: ${fmtVec(partEntry.size)}</div>`);
+    H.push(`<h3>${esc(fmt(t('map3d.partPacks'), { n: partEntry.packs.length }))}</h3>`);
+    H.push(`<div style="color:var(--muted)">${esc(t('map3d.partPackHint'))}</div><div class="table-wrap"><table>`);
+    partEntry.packs.forEach(([path, n], i) => {
+      H.push(`<tr><td><a href="#" data-part-pack="${i}">${esc(path)}</a></td><td>${n}</td>`
+        + `<td><a href="#" data-open-map="${i}">${esc(t('map3d.openMap'))}</a></td></tr>`);
+    });
+    H.push('</table></div>');
+  }
   const nodes = r.nodes.filter(n => n.type === 1);
   const shapes = r.parts.reduce((a, p) => a + p.shapes.length, 0);
   H.push(`<div>${esc(fmt(t('map3d.summary'), { n: nodes.length, p: `${r.parts.length}/${r.partCount}`, s: shapes }))}</div>`);
@@ -670,6 +782,16 @@ function renderInfo(r) {
   H.push(`<h3>${esc(t('map3d.textures'))} (${r.textures.length})</h3><div>${esc(r.textures.join(', '))}</div>`);
   infoEl.innerHTML = H.join('');
   infoEl.querySelectorAll('tr.node-row').forEach(tr => tr.addEventListener('click', () => focusNode(+tr.dataset.node, tr)));
+  if (partEntry) {
+    infoEl.querySelectorAll('a[data-part-pack]').forEach(a => a.addEventListener('click', ev => {
+      ev.preventDefault();
+      selectPart(partEntry, partEntry.packs[+a.dataset.partPack][0], null);
+    }));
+    infoEl.querySelectorAll('a[data-open-map]').forEach(a => a.addEventListener('click', ev => {
+      ev.preventDefault();
+      selectMap(partEntry.packs[+a.dataset.openMap][0], null);
+    }));
+  }
 }
 
 function focusNode(ni, tr) {

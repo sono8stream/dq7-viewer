@@ -154,6 +154,22 @@ A container of 3 sections, each a 16-byte tag followed by data:
 | `CAMR` | 4 floats (meaning not decoded) |
 | `FOG ` | not decoded (all zero in the files checked) |
 
+## Viewer: parts mode
+
+The "Map 3D" page has a **Maps / Parts** switch above the file list. "Parts"
+lists every part name placed by a WNOD node in any RomFS pack (FILE/NRML name
+of the node's part), with its total placement count; tapping one shows that
+part alone (`/api/map?file=<pack>&part=<name>`: a single node at the origin
+with no rotation, keeping the scale of the part's first placement in that
+pack). The info pane lists every pack placing it; a pack name shows that pack's
+copy (the same name is normally the same model, but nothing guarantees it),
+"map" opens the whole map. The index (`/api/map_parts`) needs the GNOD and
+NRML tables of all ~2200 packs, which takes minutes on a slow machine, so it
+is built once in a background thread and saved to
+`<rom>/viewer_cache/map_parts_index.json` (`/api/map_parts?rebuild=1` remakes
+it). Animated common parts (CMMN, e.g. doors) are not placed by WNOD and are
+not listed.
+
 ## Unresolved points
 
 - Meaning of the `GNOD` `+0x80` parameters, `CMMN` record layout and how

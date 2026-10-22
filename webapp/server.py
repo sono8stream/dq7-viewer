@@ -1746,10 +1746,69 @@ def _safe_map_path(rel: str) -> str:
     return full
 
 
-def parse_map_file(rel: str) -> dict:
-    res = mappack.read_map(_safe_map_path(rel))
+def parse_map_file(rel: str, part: str | None = None) -> dict:
+    res = mappack.read_map(_safe_map_path(rel), part)
     res['file'] = rel
+    if part is not None:
+        res['part'] = part
     return res
+
+
+# Parts index: every part name placed by any RomFS pack, with the packs that
+# place it. Reading GNOD/NRML of all ~2200 packs takes minutes (LZ11), so it
+# is built once in a background thread and saved under <rom>/viewer_cache/;
+# the request that finds it missing starts the build and reports progress.
+_PARTS_INDEX_PATH = os.path.join(_ROM_DIR, 'viewer_cache', 'map_parts_index.json')
+_parts_index = {'state': 'none', 'done': 0, 'total': 0, 'data': None}
+_parts_index_lock = threading.Lock()
+
+
+def _build_parts_index():
+    files = [f for f in list_map_files() if not f.get('generated')]
+    _parts_index['total'] = len(files)
+    parts = {}
+    for k, f in enumerate(files):
+        try:
+            placed = mappack.part_placements(_safe_map_path(f['path']))
+        except Exception:
+            placed = {}
+        for name, (count, size) in placed.items():
+            e = parts.setdefault(name, {'name': name, 'uses': 0, 'size': size, 'packs': []})
+            e['uses'] += count
+            e['packs'].append([f['path'], count])
+        _parts_index['done'] = k + 1
+    for e in parts.values():
+        e['packs'].sort(key=lambda pc: -pc[1])
+    data = {'parts': sorted(parts.values(), key=lambda e: e['name']), 'packs': len(files)}
+    os.makedirs(os.path.dirname(_PARTS_INDEX_PATH), exist_ok=True)
+    tmp = _PARTS_INDEX_PATH + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as fh:
+        json.dump(data, fh, ensure_ascii=False)
+    os.replace(tmp, _PARTS_INDEX_PATH)
+    _parts_index.update(state='ready', data=data)
+
+
+def map_parts_index(rebuild: bool = False) -> dict:
+    """{state: 'ready', parts: [{name, uses, size, packs: [[path, count]...]}]}
+    or {state: 'building', done, total} while the index is being made."""
+    with _parts_index_lock:
+        if _parts_index['state'] == 'none' and not rebuild and os.path.isfile(_PARTS_INDEX_PATH):
+            with open(_PARTS_INDEX_PATH, encoding='utf-8') as fh:
+                _parts_index.update(state='ready', data=json.load(fh))
+        if _parts_index['state'] != 'building' and (rebuild or _parts_index['state'] == 'none'):
+            _parts_index.update(state='building', done=0, total=0)
+
+            def run():
+                try:
+                    _build_parts_index()
+                except Exception as e:  # report instead of hanging in 'building'
+                    _parts_index.update(state='error', error=f'{type(e).__name__}: {e}')
+            threading.Thread(target=run, daemon=True).start()
+        st = _parts_index['state']
+    if st == 'ready':
+        return {'state': st, **_parts_index['data']}
+    return {'state': st, 'done': _parts_index['done'], 'total': _parts_index['total'],
+            'error': _parts_index.get('error')}
 
 
 def map_texture_png(rel: str, name: str) -> bytes:
@@ -3684,10 +3743,17 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self._send_json(list_map_files())
             return
 
+        if parsed.path == '/api/map_parts':
+            self._send_json(map_parts_index((qs.get('rebuild') or ['0'])[0] == '1'))
+            return
+
         if parsed.path == '/api/map':
             rel = (qs.get('file') or [''])[0]
+            part = (qs.get('part') or [None])[0]
             try:
-                if 'gzip' in (self.headers.get('Accept-Encoding') or ''):
+                if part is not None:
+                    self._send_json(parse_map_file(rel, part))
+                elif 'gzip' in (self.headers.get('Accept-Encoding') or ''):
                     body = map_json_gz(rel)
                     self.send_response(200)
                     self.send_header('Content-Type', 'application/json; charset=utf-8')
