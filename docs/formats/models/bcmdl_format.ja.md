@@ -224,7 +224,7 @@ TextureCoords[3]開始                        : +0x16C
 ```
 値は0/1/2のいずれか(使用するUVチャンネル番号)。
 
-## PICA200生コマンド構造(AlphaTest / CullMode / TexEnv)
+## PICA200生コマンド構造(AlphaTest / CullMode / TexEnv / Blend)
 
 MTOBの一部フィールドは、PICA200 GPUコマンドをほぼそのままの形でシリアライズして
 持っている。固定のコマンドヘッダ定数でマテリアルレコード内をバイト列スキャンする
@@ -287,6 +287,30 @@ Texture2のIDが3つのソースnibbleのどこかに出現するか」だけを
 そのステージの未使用な3番目のColorソーススロットに`Texture1`のIDが残っている。
 `Texture1`の本当の用途はステージ1の`MultAdd(Previous, FragmentPrimaryColor,
 Texture1)`という3入力モードで、そこでは正真正銘の加算項として使われている。)
+
+### FragOp Blend(フレームバッファへの合成)
+
+AlphaTest/CullModeと違い、**MTOBの固定オフセット**で読む。GfxMaterialのフィールド配置
+（`GfxTextureCoord[0]`を`+0x16C`と決めたのと同じ導出）から、FragmentOperationが`+0x118`
+（Depth 0x14バイト）、続いてGfxFragOpBlend:
+
+| オフセット | 型 | 内容 |
+| --- | --- | --- |
+| `+0x12C` | u32 | Mode: 0 None、1 Blend、2 BlendSeparate、3 LogicalOp |
+| `+0x130` | Vector4 | ブレンド色（float） |
+| `+0x140` | u32 | `GPUREG_COLOR_OPERATION`のParam（bit 8 = ブレンドモード） |
+| `+0x144` | u32 | ヘッダ`0x803F0100`（COLOR_OPERATION、mask 0xF、追加Param 3個、連続書き込み） |
+| `+0x148` | u32 | `GPUREG_BLEND_FUNC`: 色の式 bit 0-2、αの式 8-10、色のsrc 16-19、色のdst 20-23、αのsrc 24-27、αのdst 28-31 |
+| `+0x14C` | u32 | `GPUREG_LOGIC_OP` |
+| `+0x150` | u32 | `GPUREG_BLEND_COLOR` |
+
+係数はPICABlendFunc（0 Zero、1 One、2 SrcColor、…、6 SrcAlpha、7 OneMinusSrcAlpha、…）。
+値を使う前に`+0x144`のヘッダを確認する。マップパック（町・城・世界の7パック、1405シェイプ）で
+使われる組み合わせはちょうど3通り: Mode 0・`0x01010000`（One, Zero: 不透明）、Mode 1・
+`0x76760000`（SrcAlpha, OneMinusSrcAlpha: 水面、`m06nokg1`のような地面の影の板。これらは
+アルファテストが無効）、Mode 1・SrcAlpha/One（加算の光）。`bcmdl._frag_blend()`がシェイプの
+`fragBlend`にデコードし、マップビューアはBlend/BlendSeparateのマテリアルをその係数で、
+並べ替えあり・深度書き込みなしの半透明として描く。
 
 ## CANM(スケルタルアニメーション)
 

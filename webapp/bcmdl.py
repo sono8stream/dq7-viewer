@@ -1052,6 +1052,67 @@ def _shape_vertex_color_modes(cg, n_shapes):
     return res
 
 
+# GfxFragOpBlend (SPICA CtrGfx.Model.Material.GfxFragOpBlend): the material's
+# frame-buffer blending. Its offset follows from the GfxMaterial layout given
+# in the GfxTextureCoord comment below: FragmentOperation at MTOB +0x118 =
+# Depth (0x14) then Blend = Mode (u32, GfxFragOpBlendMode: 0 None, 1 Blend,
+# 2 BlendSeparate, 3 LogicalOp) at +0x12C, ColorF (Vector4) +0x130, then 6
+# command words +0x140: [COLOR_OPERATION param][header 0x803F0100 =
+# GPUREG_COLOR_OPERATION(0x100) | mask 0xF<<16 | 3 extra params<<20 |
+# consecutive<<31][BLEND_FUNC][LOGIC_OP][BLEND_COLOR][pad]
+# (GfxFragOpBlend.Serialize -> PICACommandWriter.SetCommand). BLEND_FUNC =
+# PICABlendFunction: color eq bits 0-2, alpha eq 8-10, color src 16-19, color
+# dst 20-23, alpha src 24-27, alpha dst 28-31 (PICABlendFunc: 0 Zero, 1 One,
+# ..., 6 SrcAlpha, 7 OneMinusSrcAlpha). Checked on map parts: every opaque
+# part seen (kibako01, wd01) has Mode 0 / func 0x01010000 (One, Zero), the
+# ground-shadow overlays (m06nokg1, m05nokg1, f02outkg1, wld25_*kg1) Mode 1 /
+# func 0x76760000 (SrcAlpha, OneMinusSrcAlpha) - those are drawn see-through
+# by the game, which alpha test alone (they have it disabled) can't express.
+_FRAGOP_BLEND = 0x12C
+_COLOR_OP_HDR = 0x803F0100
+_BLEND_MODES = {0: 'none', 1: 'blend', 2: 'blendSeparate', 3: 'logicOp'}
+_BLEND_FUNCS = ['zero', 'one', 'srcColor', 'oneMinusSrcColor', 'dstColor', 'oneMinusDstColor',
+                'srcAlpha', 'oneMinusSrcAlpha', 'dstAlpha', 'oneMinusDstAlpha', 'constantColor',
+                'oneMinusConstantColor', 'constantAlpha', 'oneMinusConstantAlpha', 'srcAlphaSaturate']
+_BLEND_EQS = ['add', 'subtract', 'reverseSubtract', 'min', 'max']
+
+
+def _frag_blend(cg, mo):
+    """{mode, colorEq, src, dst, alphaEq, alphaSrc, alphaDst} or None when
+    the command header is not where the layout puts it."""
+    if mo + 0x158 > len(cg.d) or cg.u32(mo + _FRAGOP_BLEND + 0x18) != _COLOR_OP_HDR:
+        return None
+    f = cg.u32(mo + _FRAGOP_BLEND + 0x1C)
+    name = lambda v, tbl: tbl[v] if v < len(tbl) else v  # noqa: E731
+    return {'mode': _BLEND_MODES.get(cg.u32(mo + _FRAGOP_BLEND), 'unknown'),
+            'colorEq': name(f & 7, _BLEND_EQS), 'alphaEq': name((f >> 8) & 7, _BLEND_EQS),
+            'src': name((f >> 16) & 0xF, _BLEND_FUNCS), 'dst': name((f >> 20) & 0xF, _BLEND_FUNCS),
+            'alphaSrc': name((f >> 24) & 0xF, _BLEND_FUNCS), 'alphaDst': name((f >> 28) & 0xF, _BLEND_FUNCS)}
+
+
+def _shape_frag_blends(cg, n_shapes):
+    """[_frag_blend() | None] per shape index (GfxMesh -> material)."""
+    mats = []
+    for m in cg._model_offsets():
+        mc, mp = cg._list_ref(m + 0xBC)
+        if mp and cg.d[mp:mp + 4] == b'DICT':
+            mats.extend(mo for _, mo in cg.read_dict(mp))
+    blends = [(_frag_blend(cg, mo) if mo else None) for mo in mats]
+    res = [None] * n_shapes
+    for m in cg._model_offsets():
+        mc, ma = cg._list_ref(m + 0xB4)
+        if not ma or not (0 < mc <= 4096):
+            continue
+        for k in range(mc):
+            so = cg.ref(ma + k * 4)
+            if not so or cg.d[so + 4:so + 8] != b'SOBJ':
+                continue
+            si, mi = cg.i32(so + 0x18), cg.i32(so + 0x1C)
+            if 0 <= si < n_shapes and 0 <= mi < len(blends):
+                res[si] = blends[mi]
+    return res
+
+
 # GfxTextureCoord[3] (SPICA CtrGfx.Model.Material.GfxTextureCoord, the
 # `TextureCoords` field on GfxMaterial) is a genuinely fixed-size, fixed-offset
 # inline VALUE-TYPE array (unlike TextureMappers[], whose slots are
@@ -1300,6 +1361,11 @@ def attach_shape_materials(cg, geo, ext_tex_names=None, tex_cg=None):
     for sh, vc in zip(geo['shapes'], _shape_vertex_color_modes(cg, len(geo['shapes']))):
         if vc and sh.get('colors'):
             sh['vertexColor'] = vc
+    # fragBlend: frame-buffer blending of the material (_frag_blend()), e.g.
+    # the alpha-blended ground shadows of map packs.
+    for sh, fb in zip(geo['shapes'], _shape_frag_blends(cg, len(geo['shapes']))):
+        if fb:
+            sh['fragBlend'] = fb
     for sh, tn, at, side, coord, blend in zip(geo['shapes'], shp_tex, shp_alpha, shp_side, shp_coord, shp_blend):
         if tn:
             sh['textures'] = tn

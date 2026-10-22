@@ -12,6 +12,7 @@
 //   textureUV  uv channel per stage  GfxTextureCoord.SourceCoordIndex
 //   vertexColor 'modulate'           TexEnv stage reads PrimaryColor
 //                                    (bcmdl._tex_env_vertex_color_mode)
+//   fragBlend  {mode, src, dst, ...} GfxFragOpBlend (bcmdl._frag_blend)
 // Every map material seen so far is stage0 = Modulate(PrimaryColor,
 // Texture0) with the remaining stages passthrough, so only stage 0 is drawn;
 // shapes whose combiner samples more textures are counted in the info pane.
@@ -329,20 +330,50 @@ function loadTexture(file, name) {
 
 const _SIDE = { front: THREE.FrontSide, back: THREE.BackSide, double: THREE.DoubleSide };
 
+// GfxFragOpBlend factors / equations (bcmdl._frag_blend) -> three.js
+const _BF = {
+  zero: THREE.ZeroFactor, one: THREE.OneFactor, srcColor: THREE.SrcColorFactor,
+  oneMinusSrcColor: THREE.OneMinusSrcColorFactor, dstColor: THREE.DstColorFactor,
+  oneMinusDstColor: THREE.OneMinusDstColorFactor, srcAlpha: THREE.SrcAlphaFactor,
+  oneMinusSrcAlpha: THREE.OneMinusSrcAlphaFactor, dstAlpha: THREE.DstAlphaFactor,
+  oneMinusDstAlpha: THREE.OneMinusDstAlphaFactor, srcAlphaSaturate: THREE.SrcAlphaSaturateFactor,
+};
+const _BE = {
+  add: THREE.AddEquation, subtract: THREE.SubtractEquation,
+  reverseSubtract: THREE.ReverseSubtractEquation, min: THREE.MinEquation, max: THREE.MaxEquation,
+};
+
 // One material per part shape, shared by every node instancing that part.
 function makeMaterial(s) {
   const at = s.alphaTest;
   const useVC = vcolMode && s.vertexColor === 'modulate' && !!s.colors;
-  return new THREE.MeshBasicMaterial({
+  const m = new THREE.MeshBasicMaterial({
     color: texMode ? 0xffffff : 0xb8c4d0,
     vertexColors: useVC,
     side: _SIDE[s.side] ?? THREE.DoubleSide,
     wireframe,
-    // GfxAlphaTest: discard below reference (Greater/Gequal). Alpha
-    // blending is a separate GfxFragOp setting not decoded here, so cutout
-    // only - no transparent sort.
+    // GfxAlphaTest: discard below reference (Greater/Gequal).
     alphaTest: (texMode && at && at.enabled) ? Math.max(at.reference / 255, 0.01) : 0,
   });
+  // GfxFragOpBlend (bcmdl._frag_blend): frame-buffer blending as the
+  // material sets it - water, ground shadows (SrcAlpha / 1-SrcAlpha), glows
+  // (SrcAlpha / One). Blended surfaces are sorted and don't write depth.
+  const fb = s.fragBlend;
+  if (texMode && fb && (fb.mode === 'blend' || fb.mode === 'blendSeparate')
+      && _BF[fb.src] !== undefined && _BF[fb.dst] !== undefined) {
+    m.transparent = true;
+    m.depthWrite = false;
+    m.blending = THREE.CustomBlending;
+    m.blendSrc = _BF[fb.src];
+    m.blendDst = _BF[fb.dst];
+    m.blendEquation = _BE[fb.colorEq] ?? THREE.AddEquation;
+    if (fb.mode === 'blendSeparate') {
+      m.blendSrcAlpha = _BF[fb.alphaSrc] ?? null;
+      m.blendDstAlpha = _BF[fb.alphaDst] ?? null;
+      m.blendEquationAlpha = _BE[fb.alphaEq] ?? null;
+    }
+  }
+  return m;
 }
 
 function shapeStages(s) {

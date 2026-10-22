@@ -248,7 +248,7 @@ TextureCoords[3] start                      : +0x16C
 ```
 The value is 0/1/2 (the UV channel number used).
 
-## PICA200 raw command structures (AlphaTest / CullMode / TexEnv)
+## PICA200 raw command structures (AlphaTest / CullMode / TexEnv / Blend)
 
 Some MTOB fields serialize PICA200 GPU commands in an almost raw form.
 Scanning the material record byte-by-byte for a fixed command header
@@ -315,6 +315,33 @@ count will misattribute that unused slot's texture to the wrong stage/role.
 in the stage's unused 3rd color-source slot; `Texture1`'s only real use is
 stage 1's `MultAdd(Previous, FragmentPrimaryColor, Texture1)`, a 3-input
 mode where it's genuinely the additive 3rd term.)
+
+### FragOp Blend (frame-buffer blending)
+
+Unlike AlphaTest/CullMode this is read at a **fixed MTOB offset**, derived
+from the GfxMaterial field layout (the same derivation that puts
+`GfxTextureCoord[0]` at `+0x16C`): FragmentOperation starts at `+0x118`
+(Depth, 0x14 bytes), then GfxFragOpBlend:
+
+| Offset | Type | Contents |
+| --- | --- | --- |
+| `+0x12C` | u32 | Mode: 0 None, 1 Blend, 2 BlendSeparate, 3 LogicalOp |
+| `+0x130` | Vector4 | blend colour (float) |
+| `+0x140` | u32 | `GPUREG_COLOR_OPERATION` param (bit 8 = blend mode) |
+| `+0x144` | u32 | header `0x803F0100` (COLOR_OPERATION, mask 0xF, 3 more params, consecutive) |
+| `+0x148` | u32 | `GPUREG_BLEND_FUNC`: colour eq bits 0-2, alpha eq 8-10, colour src 16-19, colour dst 20-23, alpha src 24-27, alpha dst 28-31 |
+| `+0x14C` | u32 | `GPUREG_LOGIC_OP` |
+| `+0x150` | u32 | `GPUREG_BLEND_COLOR` |
+
+Blend factors are PICABlendFunc (0 Zero, 1 One, 2 SrcColor, ... 6 SrcAlpha,
+7 OneMinusSrcAlpha, ...). The header at `+0x144` is checked before the value
+is used. Map packs (1405 shapes of 7 town/castle/world packs) use exactly
+three combinations: Mode 0 with `0x01010000` (One, Zero: opaque), Mode 1 with
+`0x76760000` (SrcAlpha, OneMinusSrcAlpha: water, ground shadow overlays such
+as `m06nokg1`, which have alpha test disabled) and Mode 1 with SrcAlpha / One
+(additive glows). `bcmdl._frag_blend()` decodes it into the shape's
+`fragBlend`; the map viewer draws Blend/BlendSeparate materials as sorted,
+non-depth-writing transparent surfaces with those factors.
 
 ## CANM (skeletal animation)
 
