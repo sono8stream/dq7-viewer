@@ -36,6 +36,12 @@ if (I18N) {
       'map3d.btnColl': 'コリジョン',
       'map3d.collision': 'コリジョン (COLL/PLGN)',
       'map3d.collCount': 'ポリゴン {n}',
+      'map3d.coll_floor': '床',
+      'map3d.coll_wall': '壁',
+      'map3d.coll_exit': '出口',
+      'map3d.coll_event': 'イベント床',
+      'map3d.coll_special': '番号付きの壁',
+      'map3d.collHint': '下の「コリジョン」ボタンで表示を切り替え',
       'map3d.btnReset': '視点リセット',
       'map3d.selectPrompt': 'マップを選択してください',
       'map3d.noMap': 'マップ未選択',
@@ -83,6 +89,12 @@ if (I18N) {
       'map3d.btnColl': 'Collision',
       'map3d.collision': 'Collision (COLL/PLGN)',
       'map3d.collCount': '{n} polygons',
+      'map3d.coll_floor': 'floor',
+      'map3d.coll_wall': 'wall',
+      'map3d.coll_exit': 'exit',
+      'map3d.coll_event': 'event floor',
+      'map3d.coll_special': 'numbered wall',
+      'map3d.collHint': 'toggle with the "Collision" button below',
       'map3d.btnReset': 'Reset view',
       'map3d.selectPrompt': 'Select a map',
       'map3d.noMap': 'No map selected',
@@ -421,18 +433,47 @@ function disposeMap() {
   boxNodes = null;
 }
 
+// PLGN record -> class for colouring (docs/formats/models/map_pack.md COLL):
+// +0x04 u16 kind (0 wall, 1/2 floor, 3 event floor, 4 numbered wall),
+// +0x0c u16 1 = exit (DQMapManager::setupExitInfo, exit id at +0x0a)
+const COLL_CLASSES = [
+  { key: 'floor', color: 0x33ff66 },
+  { key: 'wall', color: 0xff9933 },
+  { key: 'exit', color: 0xff3355 },
+  { key: 'event', color: 0x3399ff },
+  { key: 'special', color: 0xcc66ff },
+];
+function collClass(attr) {
+  const kind = attr[1] & 0xffff;
+  if ((attr[3] & 0xffff) === 1) return 2;
+  if (kind === 1 || kind === 2) return 0;
+  if (kind === 3) return 3;
+  if (kind === 4) return 4;
+  return 1;
+}
+
 function buildCollision(c) {
   if (!c || !c.positions || !c.positions.length) return;
   collBox = new THREE.Box3(new THREE.Vector3(...c.bboxMin), new THREE.Vector3(...c.bboxMax));
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(c.positions, 3));
+  const nt = c.positions.length / 9;
+  const col = new Float32Array(nt * 9);
+  const tmp = new THREE.Color();
+  for (let k = 0; k < nt; k++) {
+    const attr = (c.attrs || [])[(c.triPoly || [])[k]] || [0, 1, 0, 0];
+    tmp.setHex(COLL_CLASSES[collClass(attr)].color);
+    for (let v = 0; v < 3; v++) col.set([tmp.r, tmp.g, tmp.b], k * 9 + v * 3);
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
   // polygon offset pulls the overlay in front of coplanar floor geometry
   collGroup.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({
-    color: 0x33ff99, transparent: true, opacity: 0.25, side: THREE.DoubleSide,
+    vertexColors: true, transparent: true, opacity: 0.35, side: THREE.DoubleSide,
     depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4,
   })));
-  collGroup.add(new THREE.LineSegments(new THREE.WireframeGeometry(g),
-    new THREE.LineBasicMaterial({ color: 0x33ff99, transparent: true, opacity: 0.6 })));
+  const lines = new THREE.LineSegments(new THREE.WireframeGeometry(g),
+    new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.7 }));
+  collGroup.add(lines);
 }
 
 function applyTextures(gen) {
@@ -789,6 +830,10 @@ function renderInfo(r, partEntry) {
   if (r.collision && r.collision.count) {
     const c = r.collision;
     H.push(`<h3>${esc(t('map3d.collision'))}</h3><div>${esc(fmt(t('map3d.collCount'), { n: c.count }))}</div>`);
+    const counts = COLL_CLASSES.map(() => 0);
+    for (const a of c.attrs || []) counts[collClass(a)]++;
+    H.push('<div>' + COLL_CLASSES.map((cl, i) => counts[i] ? `<span style="display:inline-block;width:10px;height:10px;background:#${cl.color.toString(16).padStart(6, '0')};margin:0 3px 0 8px;vertical-align:middle"></span>${esc(t('map3d.coll_' + cl.key))} ${counts[i]}` : '').join('') + '</div>');
+    H.push(`<div style="color:var(--muted)">${esc(t('map3d.collHint'))}</div>`);
     H.push(`<div>min ${fmtVec(c.bboxMin, 1)} / max ${fmtVec(c.bboxMax, 1)}</div>`);
   }
 
