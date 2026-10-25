@@ -1252,6 +1252,7 @@ def _shape_textures(cg, n_shapes, ext_tex_names=None):
     side_res = [None] * n_shapes
     coord_res = [None] * n_shapes
     blend_res = [None] * n_shapes
+    name_res = [None] * n_shapes
     for m in cg._model_offsets():
         mc, ma = cg._list_ref(m + 0xB4)          # Meshes array
         if not ma or not (0 < mc <= 4096):
@@ -1271,7 +1272,8 @@ def _shape_textures(cg, n_shapes, ext_tex_names=None):
                                       for i in range(len(textures))]
                 alpha_res[si] = mats[mi][2]
                 side_res[si] = mats[mi][3]
-    return tex_res, alpha_res, side_res, coord_res, blend_res
+                name_res[si] = mats[mi][0]
+    return tex_res, alpha_res, side_res, coord_res, blend_res, name_res
 
 
 _CGFX_CACHE = collections.OrderedDict()   # (path, mtime_ns, size) -> Cgfx
@@ -1353,7 +1355,7 @@ def attach_shape_materials(cg, geo, ext_tex_names=None, tex_cg=None):
     `ext_tex_names`/`tex_cg`: for CGFX whose textures live in ANOTHER CGFX
     (map parts - see `_materials()` and mappack.py); `tex_cg` is the CGFX
     that actually holds those textures (only used by the opaqueBase fallback)."""
-    shp_tex, shp_alpha, shp_side, shp_coord, shp_blend = _shape_textures(cg, len(geo['shapes']), ext_tex_names)
+    shp_tex, shp_alpha, shp_side, shp_coord, shp_blend, shp_mname = _shape_textures(cg, len(geo['shapes']), ext_tex_names)
     holes_cache = {}
     # vertexColor: how the per-vertex `colors` enter the pixel color, read
     # from the material's TexEnv (`_tex_env_vertex_color_mode()`); only
@@ -1366,9 +1368,15 @@ def attach_shape_materials(cg, geo, ext_tex_names=None, tex_cg=None):
     for sh, fb in zip(geo['shapes'], _shape_frag_blends(cg, len(geo['shapes']))):
         if fb:
             sh['fragBlend'] = fb
-    for sh, tn, at, side, coord, blend in zip(geo['shapes'], shp_tex, shp_alpha, shp_side, shp_coord, shp_blend):
+    for sh, tn, at, side, coord, blend, mname in zip(geo['shapes'], shp_tex, shp_alpha, shp_side,
+                                                      shp_coord, shp_blend, shp_mname):
+        if mname:
+            sh['material'] = mname
         if tn:
             sh['textures'] = tn
+            fs = _face_stages(mname, tn)
+            if fs:
+                sh['faceStages'] = fs      # {'eye': stage, 'mouth': stage}, see _face_stages()
             sh['texture'] = tn[0]          # back-compat: primary stage
             # textureBlend[i]: 'base' (stage 0) | 'blend' | 'multiply' |
             # 'add' | 'unused' - decoded from the material's real TexEnv
@@ -1395,6 +1403,76 @@ def attach_shape_materials(cg, geo, ext_tex_names=None, tex_cg=None):
                 # GfxAlphaTest command pair couldn't be located - see
                 # _alpha_test()/_base_texture_mostly_holes().
                 sh['opaqueBase'] = True
+
+
+# ---- expressions (TEXTURE/<model>_face.bctex.lz) ---------------------------------
+# How the game swaps eyes/mouths (ExeFS, base VAs;
+# docs/formats/models/face_expression_textures.md):
+# - CharacterObject::setupFaceAnimation (0x1177c8) loads
+#   "TEXTURE/p%04d_j%02d_face.bctex.lz" (party slots < 7) or
+#   "TEXTURE/p%04d_face.bctex.lz", finds the model's material named
+#   "FaceMaterial", and files every texture of the face CGFX by the LAST TWO
+#   characters of its name: 'e'<digit> -> eye slot <digit>, 'm'<digit> ->
+#   mouth slot <digit> (the prefix is never compared; a later texture wins a
+#   slot; empty slots fall back to slot 0).
+# - CharacterObject::execute (0x119458 / 0x1194a4) calls
+#   CharacterObject::changeTexture(this, faceTexIndex, mapper, ...) which sets
+#   FaceMaterial's texture mapper `mapper` to that face texture: eyes use
+#   mapper [this+0x7d0] = 1, mouths [this+0x7d4] = 2 (1 when the character
+#   has no eyes), from the character record's flags (+0x50 bit 1, +0x51).
+# The viewer has no character record, so it takes the eye / mouth stage of
+# FaceMaterial from the model's own texture names (`<x>_e0` / `<x>_m0`, what
+# the shipped models put on those mappers).
+
+def _face_kind(name):
+    """'e' / 'm' / None from a texture name, by the game's last-two-chars rule."""
+    if len(name) >= 2 and name[-2] in 'em' and name[-1].isdigit():
+        return name[-2]
+    return None
+
+
+def _face_stages(material_name, textures):
+    if material_name != 'FaceMaterial':
+        return None
+    out = {}
+    for i, t in enumerate(textures):
+        k = _face_kind(t) if i > 0 else None
+        if k and ('eye' if k == 'e' else 'mouth') not in out:
+            out['eye' if k == 'e' else 'mouth'] = i
+    return out or None
+
+
+def face_file_path(model_path):
+    """TEXTURE/<stem>_face.bctex.lz next to CHARACTER/<stem>.bcmdl.lz (or
+    .pack.lz), or None."""
+    base = os.path.basename(model_path)
+    for ext in ('.bcmdl.lz', '.pack.lz', '.bcmdl'):
+        if base.endswith(ext):
+            stem = base[:-len(ext)]
+            break
+    else:
+        return None
+    root = os.path.dirname(os.path.dirname(os.path.abspath(model_path)))
+    p = os.path.join(root, 'TEXTURE', stem + '_face.bctex.lz')
+    return p if os.path.isfile(p) else None
+
+
+def face_variants(model_path):
+    """{'file', 'eyes': [{'slot', 'name'}], 'mouths': [...]} of the model's
+    expression textures (slots filed as the game does), or None."""
+    fp = face_file_path(model_path)
+    if not fp:
+        return None
+    slots = {'e': {}, 'm': {}}
+    for t in get_cgfx(fp).textures():
+        k = _face_kind(t['name'])
+        if k and t.get('ok'):
+            slots[k][int(t['name'][-1])] = t['name']
+    return {
+        'file': 'TEXTURE/' + os.path.basename(fp),
+        'eyes': [{'slot': n, 'name': v} for n, v in sorted(slots['e'].items())],
+        'mouths': [{'slot': n, 'name': v} for n, v in sorted(slots['m'].items())],
+    }
 
 
 def read_model(path):
@@ -1426,6 +1504,7 @@ def read_model(path):
         'skeleton': cg.skeleton_bones(),
         'anims': _sibling_anim_names(path),
         'animList': list_animations(path),
+        'face': face_variants(path),
     }
 
 

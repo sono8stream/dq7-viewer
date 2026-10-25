@@ -1712,6 +1712,17 @@ def model_texture_png(rel: str, name: str) -> bytes:
                                   lambda: bcmdl.get_cgfx(full).texture_png(name))
 
 
+def model_face_texture_png(rel: str, name: str) -> bytes:
+    """One expression texture (eye/mouth variant) of the model's
+    TEXTURE/<stem>_face.bctex.lz - see bcmdl.face_variants()."""
+    full = _safe_model_path(rel)
+    fp = bcmdl.face_file_path(full)
+    if not fp:
+        raise FileNotFoundError(rel)
+    return _PNG_CACHE.get_or_make(_ByteCache.file_key(fp, 'face', name),
+                                  lambda: bcmdl.get_cgfx(fp).texture_png(name))
+
+
 def model_animation(rel: str, name: str) -> dict:
     """{name, frames, tracks} for one SkeletalAnims clip - see bcmdl.read_animation."""
     full = _safe_model_path(rel)
@@ -3875,11 +3886,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(png)
             return
 
-        if parsed.path == '/api/model/texture':
+        if parsed.path in ('/api/model/texture', '/api/model/face_texture'):
             rel = (qs.get('file') or [''])[0]
             name = (qs.get('name') or [''])[0]
             try:
-                png = model_texture_png(rel, name)
+                png = (model_face_texture_png if parsed.path.endswith('face_texture')
+                       else model_texture_png)(rel, name)
             except FileNotFoundError:
                 self._send_json({'error': 'not found'}, status=404)
                 return

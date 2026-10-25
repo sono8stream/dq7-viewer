@@ -51,6 +51,11 @@ if (I18N) {
       'model.animation': 'アニメーション',
       'model.animPlayHint': '下のツールバーで再生。骨格の一部のみ推定デコード',
       'model.textures': 'テクスチャ',
+      'model.eye': '目',
+      'model.mouth': '口',
+      'model.faceDefault': 'モデル既定',
+      'model.faceVariants': '表情差分',
+      'model.faceNote': 'ゲームはテクスチャ名の末尾2文字(e数字=目 / m数字=口)でスロットに登録し、FaceMaterialの目・口のステージに貼り替える',
       'model.loading': '読み込み中...',
       'model.failed': '失敗',
       'model.error': 'エラー',
@@ -95,6 +100,11 @@ if (I18N) {
       'model.animation': 'Animation',
       'model.animPlayHint': 'play from the toolbar below; some bones are only heuristically decoded',
       'model.textures': 'Textures',
+      'model.eye': 'Eyes',
+      'model.mouth': 'Mouth',
+      'model.faceDefault': 'model default',
+      'model.faceVariants': 'Expressions',
+      'model.faceNote': 'the game files each texture by the last two characters of its name (e+digit = eye slot, m+digit = mouth slot) and puts it on the eye / mouth stage of FaceMaterial',
       'model.loading': 'Loading...',
       'model.failed': 'Failed',
       'model.error': 'Error',
@@ -220,10 +230,12 @@ const _texLoader = new THREE.TextureLoader();
 // wrap: 'repeat' for a base map that legitimately tiles (UVs outside 0..1),
 // 'clamp' for decal/overlay stages so out-of-range UVs sample the (transparent)
 // edge instead of tiling the decal across the whole surface.
-function loadTexture(file, name, wrap = 'repeat') {
-  const key = `${file}|${name}|${wrap}`;
+// src 'face': an expression variant from the model's TEXTURE/<stem>_face.bctex.lz.
+function loadTexture(file, name, wrap = 'repeat', src = 'model') {
+  const key = `${file}|${name}|${wrap}|${src}`;
   if (!texCache.has(key)) {
-    const url = `/api/model/texture?file=${encodeURIComponent(file)}&name=${encodeURIComponent(name)}`;
+    const api = src === 'face' ? '/api/model/face_texture' : '/api/model/texture';
+    const url = `${api}?file=${encodeURIComponent(file)}&name=${encodeURIComponent(name)}`;
     texCache.set(key, _texLoader.loadAsync(url).then(t => {
       t.colorSpace = THREE.SRGBColorSpace;
       const w = wrap === 'clamp' ? THREE.ClampToEdgeWrapping : THREE.RepeatWrapping;
@@ -426,6 +438,9 @@ function buildMeshes(shapes, file) {
     }
     mesh.name = s.name || `shape${built}`;
     mesh.userData.stages = stages;
+    // {eye: stage, mouth: stage} of FaceMaterial (bcmdl._face_stages): the
+    // stages the expression selectors below swap, as the game does.
+    mesh.userData.faceStages = s.faceStages || null;
     // alphaTest: {enabled, function, functionName, reference} decoded from
     // the material's real GfxAlphaTest, or undefined if bcmdl.py couldn't
     // find it (falls back to the opaqueBase heuristic flag). See matTextured.
@@ -466,7 +481,10 @@ function applyShapeTextures(mesh, genToken) {
     if (i > 0 && (!layersMode || !uvSets[i] || blend === 'unused' || !blend))
       return;   // disabled / no distinct uv set / not sampled by the combiner
     kicked++;
-    loadTexture(currentFile, texName, i === 0 ? 'repeat' : 'clamp').then(t => {
+    const fv = faceVariantFor(mesh, i);
+    const p = fv ? loadTexture(currentFile, fv, 'clamp', 'face')
+                 : loadTexture(currentFile, texName, i === 0 ? 'repeat' : 'clamp');
+    p.then(t => {
       if (genToken !== _buildGen || !t) return;
       if (i === 0) {
         if (!mesh.geometry.getAttribute('uv')) return;
@@ -505,6 +523,7 @@ function applyShapeTextures(mesh, genToken) {
         }
         om.material.wireframe = wireframe;
         om.userData.isOverlay = true;
+        om.userData.stage = i;
         om.renderOrder = i;
         mesh.add(om);
         mesh.userData.overlays.push(om);
@@ -671,6 +690,68 @@ function skinIndexFor(boneIdx) {
   if (boneIdx < 0 || !boneIdxToSkinIdx.has(boneIdx)) return staticSkinIdx;
   return boneIdxToSkinIdx.get(boneIdx);
 }
+
+// ---- expressions (eye / mouth variants) --------------------------------------
+// r.face (bcmdl.face_variants): the variant textures of the model's
+// TEXTURE/<stem>_face.bctex.lz by slot. Choosing one swaps the texture of
+// FaceMaterial's eye / mouth stage, like CharacterObject::changeTexture.
+const faceRow = document.getElementById('faceRow');
+const eyeSelect = document.getElementById('eyeSelect');
+const mouthSelect = document.getElementById('mouthSelect');
+let faceInfo = null;
+const faceSel = { eye: '', mouth: '' };     // '' = the model's own texture
+
+function faceVariantFor(mesh, stage) {
+  const fs = mesh.userData.faceStages;
+  if (!fs || !faceInfo) return null;
+  if (stage === fs.eye && faceSel.eye) return faceSel.eye;
+  if (stage === fs.mouth && faceSel.mouth) return faceSel.mouth;
+  return null;
+}
+
+function populateFaceSelects(face, shapes) {
+  faceInfo = face || null;
+  faceSel.eye = faceSel.mouth = '';
+  const has = k => (shapes || []).some(s => s.faceStages && s.faceStages[k] !== undefined);
+  const fill = (sel, list, stageKey) => {
+    if (!sel) return false;
+    sel.innerHTML = `<option value="">${esc(t('model.faceDefault'))}</option>`;
+    for (const v of (list || [])) {
+      const o = document.createElement('option');
+      o.value = v.name;
+      o.textContent = `${stageKey === 'eye' ? 'e' : 'm'}${v.slot}  ${v.name}`;
+      sel.appendChild(o);
+    }
+    const ok = !!(list && list.length && has(stageKey));
+    sel.disabled = !ok;
+    return ok;
+  };
+  const e = fill(eyeSelect, face && face.eyes, 'eye');
+  const m = fill(mouthSelect, face && face.mouths, 'mouth');
+  if (faceRow) faceRow.style.display = (e || m) ? '' : 'none';
+}
+
+// Swap only the affected overlay's map (no rebuild of the other stages).
+function applyFaceSelection() {
+  for (const mesh of modelGroup.children) {
+    const fs = mesh.userData && mesh.userData.faceStages;
+    if (!fs) continue;
+    for (const om of (mesh.userData.overlays || [])) {
+      const i = om.userData.stage;
+      if (i !== fs.eye && i !== fs.mouth) continue;
+      const fv = faceVariantFor(mesh, i);
+      const p = fv ? loadTexture(currentFile, fv, 'clamp', 'face')
+                   : loadTexture(currentFile, mesh.userData.stages[i], 'clamp');
+      p.then(tex => {
+        if (!tex || !om.material) return;
+        om.material.map = tex;
+        om.material.needsUpdate = true;
+      });
+    }
+  }
+}
+if (eyeSelect) eyeSelect.addEventListener('change', () => { faceSel.eye = eyeSelect.value; applyFaceSelection(); });
+if (mouthSelect) mouthSelect.addEventListener('change', () => { faceSel.mouth = mouthSelect.value; applyFaceSelection(); });
 
 // ---- animation UI -----------------------------------------------------
 const animSelect = document.getElementById('animSelect');
@@ -986,6 +1067,20 @@ function renderInfo(r) {
     }
     html += '</div>';
   }
+  const face = r.face;
+  if (face && ((face.eyes || []).length || (face.mouths || []).length)) {
+    html += `<div style="margin-top:10px;font-size:11px;color:var(--muted)">${t('model.faceVariants')}: ${esc(face.file)}<br>${esc(t('model.faceNote'))}</div>`;
+    html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">';
+    for (const [kind, list] of [['e', face.eyes || []], ['m', face.mouths || []]]) {
+      for (const v of list) {
+        const u = `/api/model/face_texture?file=${encodeURIComponent(r.file)}&name=${encodeURIComponent(v.name)}`;
+        html += `<figure style="margin:0;width:60px;font-size:9.5px;text-align:center">
+          <img src="${u}" style="width:56px;height:56px;object-fit:contain;background:#222;image-rendering:pixelated;border:1px solid var(--border)">
+          <figcaption style="color:var(--muted);line-height:1.2">${kind}${v.slot}<br>${esc(v.name)}</figcaption></figure>`;
+      }
+    }
+    html += '</div>';
+  }
   infoEl.innerHTML = html;
 }
 
@@ -1022,6 +1117,7 @@ async function selectModel(path, rowEl) {
   currentAnim = null;
   animPlaying = false;
   buildSkinSkeleton(r.skeleton);
+  populateFaceSelects(r.face, (r.geometry && r.geometry.shapes) || []);
   const built = await buildMeshes((r.geometry && r.geometry.shapes) || [], path);
   const nbones = buildSkeleton(r.skeleton);
   populateAnimList(r.animList);

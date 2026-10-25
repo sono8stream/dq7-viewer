@@ -28,6 +28,12 @@
   #mtoolbar .toolbar-row { display: flex; flex-wrap: wrap; gap: 6px; }
   #mtoolbar button { font-size: 11.5px; padding: 3px 8px; }
   #animSelect { font-size: 11.5px; padding: 3px 6px; flex: 1 1 auto; min-width: 0; max-width: 100%; }
+  /* expression selectors: label + select side by side, two per row, each
+     shrinkable (min-width:0) so neither pushes the other off a 375px screen */
+  #mtoolbar .face-sel { display: flex; align-items: center; gap: 4px; flex: 1 1 140px; min-width: 0;
+                        font-size: 11.5px; color: #cfe; background: rgba(0,0,0,.45); padding: 2px 6px; border-radius: 4px; }
+  #mtoolbar .face-sel span { flex: 0 0 auto; }
+  #mtoolbar .face-sel select { flex: 1 1 auto; min-width: 0; width: auto; font-size: 11.5px; padding: 3px 4px; }
   #mtoolbar button.active { background: #3a6ea5; color: #fff; border-color: #3a6ea5; }
   #minfo img { display: block; }
   #mhint { position: absolute; right: 10px; bottom: 10px; color: var(--muted); font-size: 11px; }
@@ -91,6 +97,10 @@
         <button id="btnNormals" data-i18n="model.btnNormals">法線カラー</button>
         <button id="btnBones" data-i18n="model.btnBones">ボーン</button>
         <button id="btnReset" data-i18n="model.btnReset">視点リセット</button>
+      </div>
+      <div class="toolbar-row" id="faceRow" style="display:none">
+        <label class="face-sel"><span data-i18n="model.eye">目</span><select id="eyeSelect" disabled></select></label>
+        <label class="face-sel"><span data-i18n="model.mouth">口</span><select id="mouthSelect" disabled></select></label>
       </div>
       <div class="toolbar-row">
         <select id="animSelect" disabled></select>
