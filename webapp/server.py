@@ -418,6 +418,14 @@ CHOICE_MENU_OPCODE = 0x000100c5
 # moves/teleports an actor to a new position at script-runtime, as
 # opposed to the placement table's static initial position.
 SET_POSITION_OPCODE = 0x00010014
+# 【確定 2026-10-25】0x1009d = CmdCharacterMoveRandom: script::CommandFunction
+# のジャンプテーブル0x9d番が呼ぶオブジェクト(0x404870)に、静的初期化で
+# CmdCharacterMoveRandomのvtable(0x3dafd4、先頭がinitialize 0x31ff68)が
+# 入る。initializeはRandomMoveControl::setParam(x0, z0, x1, z1, 速さ)を呼び、
+# 長方形を4x4に区切ったマスの中心へランダムに歩かせる。最後の引数は
+# ScriptTypesUtility::speedTableToSpeedValueの段階(0..13 = 0.025..0.4単位/フレーム)。
+MOVE_RANDOM_OPCODE = 0x0001009D
+_MOVE_SPEEDS = [0.025, 0.05, 0.075, 0.1, 0.11, 0.12, 0.13, 0.14, 0.15, 0.175, 0.2, 0.25, 0.3, 0.4]
 
 # 【確定 2026-08-30】object有効/無効切り替え - ユーザーが実機で発見・確定。
 # params=[target]: 対象は同じgroup内の「(target+1)番目のobject」(0-based
@@ -1981,6 +1989,13 @@ def _decode_command(raw: bytes) -> dict:
         out['pos_x'] = round(struct.unpack('<f', struct.pack('<I', params[0]))[0], 4)
         out['pos_y'] = round(struct.unpack('<f', struct.pack('<I', params[1]))[0], 4)
         out['pos_z'] = round(struct.unpack('<f', struct.pack('<I', params[2]))[0], 4)
+    elif opcode == MOVE_RANDOM_OPCODE and len(params) >= 5:
+        out['name'] = 'MOVE_RANDOM'
+        f = [round(struct.unpack('<f', struct.pack('<I', v))[0], 4) for v in params[:4]]
+        out['area'] = {'x0': f[0], 'z0': f[1], 'x1': f[2], 'z1': f[3]}
+        out['speed_index'] = params[4]
+        if params[4] < len(_MOVE_SPEEDS):
+            out['speed'] = _MOVE_SPEEDS[params[4]]
     elif (opcode & 0xFFFF) == (OBJECT_TOGGLE_OPCODE & 0xFFFF) and len(params) >= 1:
         # 【確定 2026-10-04】OBJECT_TOGGLEもhigh16(0x0001/0x0003)の対象になりうる
         # ことを実機検証用NPCの作成中に確認した(docs/battle_start_opcode_
@@ -2110,7 +2125,7 @@ def _split_commands(block1: dict, block2: dict, block3: dict) -> list:
 _NPC_PLACEMENT_FIELD_DEFS = [
     (0, 'speaker_id', 'u32', '話者ID: このobjectのセリフ先頭の#NNNN(町の人は2000番台)。全SCRIPTの配置ありobjectのMSG 12,938件中12,605件で一致(2026-10-25、docs/formats/script/script_opcodes.md)'),
     (4, 'npc_model_id', 'u32', '【確定・実機検証済み】NPCの表示モデル/アクターID。182→2書き換えでシスターの見た目がマリベルに変化することを確認(2026-08-23)'),
-    (8, 'direction', 'u32', '向き(0〜3)。配置あり23,712件すべて0〜3。DS版DQ4のPlacementParameter(ctrlId,キャラ,向き,x,y,z)と同じ並び・同じ値域。実機未確認'),
+    (8, 'direction', 'u32', '向き(0〜3): 0=+z(カメラ側) 1=-x 2=-z 3=+x。3=+xは実機で観察(2026-10-25)。DS版DQ4と並びは同じだが回転の向きが逆(DQ4は1=+x)'),
     (12, 'pos_x', 'f32', '【確定・実機検証済み】マップ座標X。ビュアーで書き換えてCIA再ビルド・実機テストしたところ表示位置が実際に変化することを確認(2026-08-27)'),
     (16, 'pos_y', 'f32', '【確定・実機検証済み】マップ座標Y（高さ）。ビュアーで書き換えてCIA再ビルド・実機テストしたところ表示位置が実際に変化することを確認(2026-08-27)'),
     (20, 'pos_z', 'f32', '【確定・実機検証済み】マップ座標Z。ビュアーで書き換えてCIA再ビルド・実機テストしたところ表示位置が実際に変化することを確認(2026-08-27)'),

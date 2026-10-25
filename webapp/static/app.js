@@ -388,7 +388,7 @@ function renderTree(tree) {
       if (o.npc_placement) {
         const np = o.npc_placement;
         const lowConf = np.confidence === 'low' ? '?' : '';
-        placementHtml = ` <span class="npc-placement" title="model#・座標(pos_x/y/z)は実機検証済み。speaker_id(+0)はセリフの#番号と一致、direction(+8)は向き0〜3(実機未確認)">model#${np.npc_model_id}${lowConf} @(${np.pos_x}, ${np.pos_z})</span>`;
+        placementHtml = ` <span class="npc-placement" title="model#・座標(pos_x/y/z)は実機検証済み。speaker_id(+0)はセリフの#番号と一致、direction(+8)は向き0=+z 1=-x 2=-z 3=+x(3=+xは実機で観察)">model#${np.npc_model_id}${lowConf} @(${np.pos_x}, ${np.pos_z})</span>`;
       }
       oSummary.innerHTML = `obj ${o.index} <span class="tag-name">${escapeHtml(o.tag)}</span>` +
         (hasText ? ' <span style="color:#9fd18a">●</span>' : '') + placementHtml;
@@ -506,6 +506,8 @@ function renderTree(tree) {
             ? `CHOICE_MENU slots2-6=[${(c.slot_flags || []).join(',')}]`
             : c.name === 'SET_POSITION'
             ? `SET_POSITION x=${c.pos_x} y=${c.pos_y} z=${c.pos_z}`
+            : c.name === 'MOVE_RANDOM'
+            ? `🚶 MOVE_RANDOM x ${c.area.x0}..${c.area.x1} z ${c.area.z0}..${c.area.z1} speed#${c.speed_index}`
             : c.name === 'OBJECT_TOGGLE'
             ? `OBJECT_TOGGLE obj${c.target_object_idx}`
             : c.name === 'MAP_WARP'
@@ -1148,6 +1150,12 @@ function showCommandDetail(c, o, p, ci) {
     lines.push(`  x=${c.pos_x}  y=${c.pos_y}  z=${c.pos_z}`);
     lines.push(`  NPC配置情報テーブルのpos_x/pos_y/pos_z(実機検証済み・上記docs参照)と同じ形。`);
     lines.push(`  こちらはスクリプト実行時にアクターを動的に移動させるコマンドと推測。まだ実機未検証。`);
+  }
+  if (c.name === 'MOVE_RANDOM') {
+    lines.push(`MOVE_RANDOM (確定 2026-10-25, CmdCharacterMoveRandom): walk at random inside a rectangle`);
+    lines.push(`  x ${c.area.x0} .. ${c.area.x1}, z ${c.area.z0} .. ${c.area.z1}: the rectangle is cut 4x4 and the NPC walks to random cell centres`);
+    lines.push(`  speed index ${c.speed_index} = ${c.speed ?? '?'} units/frame (ScriptTypesUtility::speedTableToSpeedValue)`);
+    lines.push(`  See docs/formats/script/script_opcodes.md.`);
   }
   if (c.name === 'OBJECT_TOGGLE') {
     lines.push(`OBJECT_TOGGLE (確定 2026-08-30、ユーザーが実機で発見): 同じgroup内のobj${c.target_object_idx}の表示on/offを切り替える`);
