@@ -41,6 +41,7 @@ if (I18N) {
       'map3d.coll_exit': '出口',
       'map3d.coll_event': 'イベント床',
       'map3d.coll_special': '番号付きの壁',
+      'map3d.coll_counter': 'カウンター（越しに話せる）',
       'map3d.collHint': '下の「コリジョン」ボタンで表示を切り替え',
       'map3d.btnReset': '視点リセット',
       'map3d.selectPrompt': 'マップを選択してください',
@@ -94,6 +95,7 @@ if (I18N) {
       'map3d.coll_exit': 'exit',
       'map3d.coll_event': 'event floor',
       'map3d.coll_special': 'numbered wall',
+      'map3d.coll_counter': 'counter (talk across)',
       'map3d.collHint': 'toggle with the "Collision" button below',
       'map3d.btnReset': 'Reset view',
       'map3d.selectPrompt': 'Select a map',
@@ -435,17 +437,20 @@ function disposeMap() {
 
 // PLGN record -> class for colouring (docs/formats/models/map_pack.md COLL):
 // +0x04 u16 kind (0 wall, 1/2 floor, 3 event floor, 4 numbered wall),
-// +0x0c u16 1 = exit (DQMapManager::setupExitInfo, exit id at +0x0a)
+// +0x0c u16 1 = exit (DQMapManager::setupExitInfo, exit id at +0x0a),
+// 0x10 = counter (PlayerManager::selectSpeekChara talks through it)
 const COLL_CLASSES = [
   { key: 'floor', color: 0x33ff66 },
   { key: 'wall', color: 0xff9933 },
   { key: 'exit', color: 0xff3355 },
   { key: 'event', color: 0x3399ff },
   { key: 'special', color: 0xcc66ff },
+  { key: 'counter', color: 0xffee33 },
 ];
 function collClass(attr) {
   const kind = attr[1] & 0xffff;
   if ((attr[3] & 0xffff) === 1) return 2;
+  if ((attr[3] & 0xffff) === 0x10) return 5;
   if (kind === 1 || kind === 2) return 0;
   if (kind === 3) return 3;
   if (kind === 4) return 4;

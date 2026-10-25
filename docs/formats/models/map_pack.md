@@ -134,7 +134,7 @@ Polygon record:
 | Offset | Type | Contents |
 | --- | --- | --- |
 | `+0x00` | u32 | `1` = quad, `0` = triangle (4th vertex zero-filled) |
-| `+0x04` | u32[3] | attributes (not decoded) |
+| `+0x04` | u32[3] | attributes: `+0x04` u16 kind (0 wall, 1/2 floor, 3 event floor, 4 numbered wall: map objects, number at `+0x06`), `+0x0a` u16 exit id, `+0x0c` u16 flags: `1` = exit (`DQMapManager::setupExitInfo` takes exactly 1), `0x10` = counter (`PlayerManager::selectSpeekChara` casts a ray from the player to the NPC and lets it pass a polygon whose `+0x0c` is exactly 0x10, with `+0x0e & 0x2000` clear, if the crossing is within 1.6 of the player; e.g. `c04pf2`'s inn counter: kind 0, `+0x0a` 1, `+0x0c` 0x10). Numbered walls: the ray may pass number 800 (church lectern) and some 7xx / 15xx. Other words not decoded |
 | `+0x10` | vec4[4] | vertices in perimeter order (w = 0) |
 | `+0x50` | vec4 | face normal |
 | `+0x60` | vec4 | bounding box min (w = 1) |
