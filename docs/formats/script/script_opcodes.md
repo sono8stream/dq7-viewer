@@ -289,3 +289,14 @@ classes that carry no notion of character at all.
 ## Command class table (all ids)
 
 `webapp/dq7_command_classes.py` maps 170 of the 236 command ids to the `ScriptCommand` class they run (e.g. 0x09 `CmdSpeakToPlayer1`, 0x13 `CmdPlayerLock`, 0x25 `CmdMenuYesNo`, 0x2c `CmdOpenFacilityMenu`, 0x9d `CmdCharacterMoveRandom`). It is read from the ExeFS: each case of `script::CommandFunction`'s jump table (file offset 0x216610) loads one global command object, and a static initializer stores that object's vtable, whose first slot is `<Class>::initialize`. The other ids are plain functions (conditions such as `IF_FLAG`, `IF_TALKED_TO`, and `SET_FLAG`). The viewer shows the class name for commands it does not decode yet.
+
+Message commands: `0x09 CmdSpeakToPlayer1` / `0x0b CmdMessage1WaitClosing` /
+`0x0d CmdSpeakToPlayer1WaitClosing` take the same parameters `[message id, count]` and
+open the same message (`MessageSystem::addMessage`). They differ in when the command
+ends: `CmdSpeakToPlayer1::isEnd` returns 1 at once, so the next command runs while the
+window is still open; the `WaitClosing` versions end only when the window has closed.
+`CmdSpeakToPlayer1` (and its WaitClosing version) also turns the speaking object toward
+the player (`setTalkScriptCharacter(..., 1)` and a motion remote control); `CmdMessage1`
+does not. In the game's scripts 0x09 is the last command of its block or is followed by
+its `CmdMenuYesNo` (1015 of 1090 otherwise); 0x0b / 0x0d are followed by more commands
+(14,065 of 14,070).

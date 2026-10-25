@@ -248,3 +248,13 @@ NPCを実際にゲームで動かして確認）の結果、正しくは次の�
 ## 命令クラスの表（全命令）
 
 `webapp/dq7_command_classes.py`は、236ある命令番号のうち170件について、実行される`ScriptCommand`のクラスを対応づけた表（例: 0x09 `CmdSpeakToPlayer1`、0x13 `CmdPlayerLock`、0x25 `CmdMenuYesNo`、0x2c `CmdOpenFacilityMenu`、0x9d `CmdCharacterMoveRandom`）。ExeFSから読んだ: `script::CommandFunction`のジャンプテーブル（file 0x216610）の各caseが1つの命令オブジェクトを読み、そのオブジェクトには静的初期化でvtableが入る。vtableの先頭が`<クラス>::initialize`になっている。残りの番号は関数で、`IF_FLAG`・`IF_TALKED_TO`などの条件と`SET_FLAG`がこれに当たる。ビューアは、まだ解読していない命令にクラス名を表示する。
+
+メッセージ命令: `0x09 CmdSpeakToPlayer1`・`0x0b CmdMessage1WaitClosing`・
+`0x0d CmdSpeakToPlayer1WaitClosing`は引数が同じ`[メッセージ番号, 件数]`で、同じように
+メッセージを開く(`MessageSystem::addMessage`)。違いは命令が終わる時点で、
+`CmdSpeakToPlayer1::isEnd`はすぐ1を返すため、ウィンドウが開いたまま次の命令が実行される。
+`WaitClosing`版はウィンドウが閉じたときに終わる。
+`CmdSpeakToPlayer1`(とそのWaitClosing版)は話す側のobjectをプレイヤーに向ける
+(`setTalkScriptCharacter(..., 1)`とモーションのリモコン)が、`CmdMessage1`は向けない。
+ゲームのスクリプトでは、0x09はブロックの最後の命令か、直後が自分の`CmdMenuYesNo`
+(それ以外の1090件中1015件)。0x0b・0x0dの後には他の命令が続く(14,070件中14,065件)。
