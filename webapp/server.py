@@ -820,17 +820,19 @@ def parse_encount_data() -> dict:
             return f'(special code {mid})'
         return mon.get(mid, f'#{mid}')
 
-    slot_labels = ['A0', 'A1', 'A2', 'A3', 'A4', 'B0', 'B1', 'B2', 'B3', '+1c']
+    # Records start at file offset 0x14 (20-byte header); offsets as read by
+    # EncountData::setupData. 12 slots: A (+0x02 x5), B (+0x0c x4), +0x18, +0x14, +0x16.
+    slot_labels = ['A0', 'A1', 'A2', 'A3', 'A4', 'B0', 'B1', 'B2', 'B3', '+18', '+14', '+16']
     records = []
     for i in range(nrec):
-        r = data[16 + i * rsize:16 + (i + 1) * rsize]
-        A = [struct.unpack_from('<H', r, 0x06 + 2 * k)[0] for k in range(5)]
-        B = [struct.unpack_from('<H', r, 0x10 + 2 * k)[0] for k in range(4)]
-        x1c = struct.unpack_from('<H', r, 0x1c)[0]
-        slot_ids = A + B + [x1c]
-        w1 = _nibbles_lo_first(r[0x2d:0x32])
-        w2 = _nibbles_lo_first(r[0x33:0x38])
-        mid = list(r[0x20:0x28])
+        r = data[20 + i * rsize:20 + (i + 1) * rsize]
+        A = [struct.unpack_from('<H', r, 0x02 + 2 * k)[0] for k in range(5)]
+        B = [struct.unpack_from('<H', r, 0x0c + 2 * k)[0] for k in range(4)]
+        x18, x14, x16 = (struct.unpack_from('<H', r, o)[0] for o in (0x18, 0x14, 0x16))
+        slot_ids = A + B + [x18, x14, x16]
+        w1 = _nibbles_lo_first(r[0x29:0x2f])
+        w2 = _nibbles_lo_first(r[0x2f:0x35])
+        mid = list(r[0x1c:0x24])
         is_empty = not any(A)
         is_special = any(991 <= m <= 999 for m in A)
         zone = i // 2
@@ -842,18 +844,19 @@ def parse_encount_data() -> dict:
             'maps': zmap.get(zone, []),
             'arrayA': [{'id': m, 'name': mname(m), 'name_en': mname_en(m)} for m in A],
             'arrayB': [{'id': m, 'name': mname(m), 'name_en': mname_en(m)} for m in B],
-            'extra_rare': {'id': x1c, 'name': mname(x1c), 'name_en': mname_en(x1c)},   # +0x1c レア客枠
-            'flee_level': r[0x1e],
-            'x1f': r[0x1f],
+            'extra_rare': {'id': x18, 'name': mname(x18), 'name_en': mname_en(x18)},   # +0x18 レア客枠
+            'extra_slots': [{'id': m, 'name': mname(m), 'name_en': mname_en(m)} for m in (x14, x16)],
+            'flee_level': r[0x1a],
+            'bgm': r[0x1b],     # 戦闘BGM番号 (dsno) -> DQSoundManager::playBattleBgm
             'mid': mid,
-            'x28': r[0x28], 'x29': r[0x29], 'x2a': r[0x2a],
-            'x2b': r[0x2b], 'x2c': r[0x2c], 'x32': r[0x32],
+            'x24': r[0x24], 'special': r[0x25], 'x26': r[0x26],
+            'x27': r[0x27], 'x28': r[0x28],
             'weights1': [
                 {'slot': slot_labels[k], 'id': slot_ids[k],
-                 'name': mname(slot_ids[k]), 'name_en': mname_en(slot_ids[k]), 'w': w1[k]} for k in range(10)],
+                 'name': mname(slot_ids[k]), 'name_en': mname_en(slot_ids[k]), 'w': w1[k]} for k in range(12)],
             'weights2': [
                 {'slot': slot_labels[k], 'id': slot_ids[k],
-                 'name': mname(slot_ids[k]), 'name_en': mname_en(slot_ids[k]), 'w': w2[k]} for k in range(10)],
+                 'name': mname(slot_ids[k]), 'name_en': mname_en(slot_ids[k]), 'w': w2[k]} for k in range(12)],
             'is_empty': is_empty,
             'is_special': is_special,
             'raw_hex': r.hex(),
@@ -863,8 +866,7 @@ def parse_encount_data() -> dict:
         'record_size': rsize,
         'record_count': nrec,
         'header_ok': nrec == nrec2,
-        'field_doc': 'docs/camera_encount_investigation.md '
-                     '「dq7_encount_data.dat レコード構造の解読」',
+        'field_doc': 'docs/formats/leveldata/camera_and_encounter_data.md',
         'records': records,
     }
     return _encount_data_cache

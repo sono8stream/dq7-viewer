@@ -20,23 +20,24 @@ DQ7I18N.extend({
     'encount.zoneUsers': 'このゾーンを使う部屋コード',
     'encount.noMatchingTile': '(encount_tile に該当なし)',
     'encount.specialNote': '※ arrayA に 991–999 の特殊コード。石版/すれちがい/モンスターパーク等の差し込み枠',
-    'encount.arrayARoster': 'arrayA (+0x06) = ロスター',
-    'encount.arrayBFormation': 'arrayB (+0x10) = フォーメーション',
-    'encount.rareSlot': '+0x1c = レア客枠 (低確率で1体加わる)',
+    'encount.arrayARoster': 'arrayA (+0x02) = ロスター',
+    'encount.arrayBFormation': 'arrayB (+0x0c) = フォーメーション',
+    'encount.rareSlot': '+0x18 = レア客枠 (低確率で1体加わる)',
     'encount.noneParen': '(なし)',
-    'encount.fleeThreshold': '+0x1e 逃走レベル閾値',
+    'encount.fleeThreshold': '+0x1a 逃走レベル閾値',
     'encount.fleeThresholdNote': '(熟練度加算しきい値も兼ねる仮説あり)',
-    'encount.alwaysConst16': '(実データは常に16)',
-    'encount.midTable': '+0x20–0x27 mid = フォーメーション(体数/隊列)抽選表',
+    'encount.battleBgm': '+0x1b 戦闘BGM番号',
+    'encount.battleBgmNote': '(16=通常戦闘 M17_FIGHT, 17=ボス M18_STRONGERS, 30=M35_ORUGODEMIRA)',
+    'encount.midTable': '+0x1c–0x23 mid = フォーメーション(体数/隊列)抽選表',
     'encount.midTableNote': '… roll=rand(1..mid[7]); 最初に roll<=mid[i] の i がテンプレ。i0=敵1体。小さいほど小編成',
-    'encount.weights1Label': 'ブロック1 (+0x2d–0x31) = スロット別「出現重み」表 [A0..A4,B0..B3,+1c] / 下位ニブル先。緑=メタル系',
-    'encount.weights2Label': 'ブロック2 (+0x33–0x37) = 同スロット並びの別軸重み (意味未確定)',
+    'encount.weights1Label': 'ブロック1 (+0x29–0x2e) = スロット別「出現重み」表 [A0..A4,B0..B3,+18,+14,+16] / 下位ニブル先。緑=メタル系',
+    'encount.weights2Label': 'ブロック2 (+0x2f–0x34) = 同スロット並びの表 (btl::getAppearCountに通す数)',
     'encount.otherBytes': 'その他バイト',
     'encount.zoneAdjustNote': '(ゾーン調整値/用途未確定)',
     'encount.alwaysConst96': '(通常96固定)',
-    'encount.separator': '(区切り)',
+    'encount.specialId': '(特殊エンカウント番号)',
     'encount.rawBytes': 'raw (56 byte)',
-    'encount.sourceNote': '根拠: docs/camera_encount_investigation.md 「レコード構造の解読」/「レア(メタル系)モンスターの出にくさの実装」',
+    'encount.sourceNote': '根拠: docs/formats/leveldata/camera_and_encounter_data.ja.md (オフセットは EncountData::setupData が読むもの)',
   },
   en: {
     'encount.tabList': 'Records',
@@ -54,23 +55,24 @@ DQ7I18N.extend({
     'encount.zoneUsers': 'Room codes using this zone',
     'encount.noMatchingTile': '(no match in encount_tile)',
     'encount.specialNote': '* arrayA contains special codes 991-999: slots for tablets/StreetPass/Monster Park etc.',
-    'encount.arrayARoster': 'arrayA (+0x06) = roster',
-    'encount.arrayBFormation': 'arrayB (+0x10) = formation',
-    'encount.rareSlot': '+0x1c = rare-guest slot (low chance of joining)',
+    'encount.arrayARoster': 'arrayA (+0x02) = roster',
+    'encount.arrayBFormation': 'arrayB (+0x0c) = formation',
+    'encount.rareSlot': '+0x18 = rare-guest slot (low chance of joining)',
     'encount.noneParen': '(none)',
-    'encount.fleeThreshold': '+0x1e flee level threshold',
+    'encount.fleeThreshold': '+0x1a flee level threshold',
     'encount.fleeThresholdNote': '(hypothesized to also double as a level-scaling threshold)',
-    'encount.alwaysConst16': '(always 16 in real data)',
-    'encount.midTable': '+0x20-0x27 mid = formation (count/lineup) roll table',
+    'encount.battleBgm': '+0x1b battle BGM number',
+    'encount.battleBgmNote': '(16=normal battle M17_FIGHT, 17=boss M18_STRONGERS, 30=M35_ORUGODEMIRA)',
+    'encount.midTable': '+0x1c-0x23 mid = formation (count/lineup) roll table',
     'encount.midTableNote': '... roll=rand(1..mid[7]); first i where roll<=mid[i] is the template. i0=1 enemy. Smaller = smaller group',
-    'encount.weights1Label': 'Block 1 (+0x2d-0x31) = per-slot "appearance weight" table [A0..A4,B0..B3,+1c] / low nibble first. Green=metal-type',
-    'encount.weights2Label': 'Block 2 (+0x33-0x37) = a second weight axis for the same slot order (meaning unconfirmed)',
+    'encount.weights1Label': 'Block 1 (+0x29-0x2e) = per-slot "appearance weight" table [A0..A4,B0..B3,+18,+14,+16] / low nibble first. Green=metal-type',
+    'encount.weights2Label': 'Block 2 (+0x2f-0x34) = a table in the same slot order (counts, passed through btl::getAppearCount)',
     'encount.otherBytes': 'Other bytes',
     'encount.zoneAdjustNote': '(zone adjustment value / purpose unconfirmed)',
     'encount.alwaysConst96': '(normally fixed at 96)',
-    'encount.separator': '(separator)',
+    'encount.specialId': '(special encounter id)',
     'encount.rawBytes': 'raw (56 bytes)',
-    'encount.sourceNote': 'Source: docs/camera_encount_investigation.md, "Decoding the record structure" / "Rare (metal-type) monster scarcity implementation"',
+    'encount.sourceNote': 'Source: docs/formats/leveldata/camera_and_encounter_data.md (offsets as read by EncountData::setupData)',
   },
 });
 
@@ -206,7 +208,8 @@ function renderDetail(idx) {
 
   h += `<div class="sec">${t('encount.fleeThreshold')} = ${r.flee_level}` +
        `<span style="color:var(--muted)"> ${t('encount.fleeThresholdNote')}</span></div>`;
-  h += `<div>+0x1f = ${r.x1f} ${t('encount.alwaysConst16')}</div>`;
+  h += `<div class="sec">${t('encount.battleBgm')} = ${r.bgm}` +
+       `<span style="color:var(--muted)"> ${t('encount.battleBgmNote')}</span></div>`;
 
   h += `<div class="sec">${t('encount.midTable')}</div>`;
   h += `<div class="mono">[${esc(midv)}]  ${t('encount.midTableNote')}</div>`;
@@ -215,8 +218,8 @@ function renderDetail(idx) {
   h += wtTable(r.weights2, t('encount.weights2Label'));
 
   h += `<div class="sec">${t('encount.otherBytes')}</div>`;
-  h += `<div class="mono">+0x28=${r.x28} ${t('encount.zoneAdjustNote')}  +0x29=${r.x29}  ` +
-       `+0x2a=${r.x2a} ${t('encount.alwaysConst96')}  +0x2b=${r.x2b}  +0x2c=${r.x2c}  +0x32=${r.x32} ${t('encount.separator')}</div>`;
+  h += `<div class="mono">+0x24=${r.x24} ${t('encount.zoneAdjustNote')}  +0x25=${r.special} ${t('encount.specialId')}  ` +
+       `+0x26=${r.x26} ${t('encount.alwaysConst96')}  +0x27=${r.x27}  +0x28=${r.x28}</div>`;
 
   h += `<div class="sec">${t('encount.rawBytes')}</div><div class="mono">${r.raw_hex.replace(/(..)/g, '$1 ').trim()}</div>`;
   h += `<div class="sec" style="color:var(--muted);font-weight:normal">${t('encount.sourceNote')}</div>`;

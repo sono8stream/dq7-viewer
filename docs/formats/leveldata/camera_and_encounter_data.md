@@ -63,40 +63,57 @@ LEVELDATA/dq7_floor_list.dat (holds the map code name at the same index, variabl
 LEVELDATA/dq7_floor_param.dat (holds int32×3 at the same index, 12 bytes/record)
 ```
 
-The 3rd int32 field of `dq7_floor_param.dat` holds a `dq7_map_camera.dat`
-index in its low byte, but since `dq7_map_camera.dat` itself is not used
-by the actual field camera (as noted above), the real purpose of this
-association is unconfirmed.
+Like every LEVELDATA table, `dq7_floor_param.dat` has a 20-byte header and
+its records start at file offset 0x14 (`ExcelBinaryData::getRecordDynamic`).
+**Record +0x04 (u8) is the floor's BGM number** (dsno): the number
+`DQSoundManager::playTownBgm` looks up in the code's BGM table
+(dsno → sound of `SOUND/dq7_sound_data.bcsar`) when the map is entered.
+Examples: `m01nout` 5 (`DQ7_BGM_M06_NODOKA`), `c01nout` 4 (`M05_HORN`),
+`wld_n01a` 12 (`M13_FIELDS_NOW`). The code table has 34 BGM entries
+(dsno 0-33; 32 and 33 are empty).
+
+(Correction: this byte was earlier described as "the low byte of the 3rd
+int32 = a `dq7_map_camera.dat` index", counting records from a 16-byte
+header. It is the BGM number.)
 
 ## `dq7_encount_data.dat` (304 records × 56 bytes) — the encounter table itself
 
 ### Whole file
 
-- Common 16-byte header (nrec=304, recsize=56).
-- Record 0 is all-zero (dummy/sentinel).
+- 20-byte header (nrec=304, recsize=56); record i starts at file offset
+  0x14 + i × 56 (`EncountData::setupData` reads it from there; the
+  fields it decodes are noted below).
+- Record 0 is all-zero (dummy/sentinel). The record number is the battle
+  number (`Encount::brew` → `EncountData::setup(battle)`; the script battle
+  commands pass it).
 - 167 records hold real data. The remaining 137 are "no monster" slots.
 
 ### Record structure (offsets from the start of the record)
 
 | off | type | content |
 |---|---|---|
-| +0x00 | 4 bytes | marker (`00 FF FF FF` for almost all records) |
-| +0x04 | u16 | self-index (exactly matches its position in the array) |
-| +0x06 | u16×5 | arrayA: monster ID roster. 0 = empty slot, no duplicates, roughly ascending |
-| +0x10 | u16×4 | arrayB: actual formation (the 4 slots that actually appear). May have duplicates; not necessarily a subset of arrayA |
-| +0x18 | u16×2 | always 0 in records with real data (reserved/unused) |
-| +0x1c | u16 | "rare visitor" slot. A single monster that joins the formation with low probability. Its weight (block 1 below) tends to be the lowest among slots, and metal-type/stronger monsters tend to be placed here |
-| +0x1e | u8 | flee (hit-and-run) judgment level threshold. If the player's level exceeds this value, enemies flee. Records with monsters have a median ≈ 33; empty records are mostly 99 |
-| +0x1f | u8 | fixed at 16 for almost all records with real data (flag/format constant) |
-| +0x20 | u8×8 | mid: weighted lottery table for the formation (enemy count/layout). `roll=rand(1..mid[7])`, the first `i` such that `roll<=mid[i]` is the template number. Template i0 = 1 enemy. Smaller values skew toward smaller formations |
-| +0x28 | u8 | zone-specific tuning value (range 11-41, bell-curve distribution). Confirmed on real hardware to have no effect on encounter frequency. Purpose unconfirmed |
-| +0x29 | u8 | mostly 0 (unused) |
-| +0x2a | u8 | fixed at 96 (0x60) for almost all records (meaning unclear constant) |
-| +0x2b | u8 | distribution that looks like a bitfield (lower 3 bits skew toward a specific pattern). Meaning unconfirmed |
-| +0x2c | u8 | distribution that looks like a bitfield (mostly 0/1, with some values having bit 3/4/5 set). Meaning unconfirmed |
-| +0x2d-0x31 | 5 bytes = 10 nibbles | block 1: per-slot "appearance weight" table. Read low-nibble-first; the 10 nibbles correspond 1:1 to `[A0,A1,A2,A3,A4, B0,B1,B2,B3, +0x1c]`. Empty slots always have weight 0, filled slots always have weight 1-9. Metal-type slots have a lower weight on average |
-| +0x32 | u8 | 0 for almost all records (separator/reserved) |
-| +0x33-0x37 | 5 bytes = 10 nibbles | block 2: a separate-axis weight table with the same slot mapping as block 1 (low-nibble-first, empty slot = 0). How the two axes are used differently is unconfirmed |
+| +0x00 | u16 | self-index (exactly matches its position in the array) |
+| +0x02 | u16×5 | arrayA: monster ID roster. 0 = empty slot, no duplicates, roughly ascending |
+| +0x0c | u16×4 | arrayB: actual formation (the 4 slots that actually appear). May have duplicates; not necessarily a subset of arrayA |
+| +0x14 | u16×2 | slots 11 and 12 (read like the others, after +0x18 in slot order); 0 in all records |
+| +0x18 | u16 | "rare visitor" slot. A single monster that joins the formation with low probability. Its weight (block 1 below) tends to be the lowest among slots, and metal-type/stronger monsters tend to be placed here |
+| +0x1a | u8 | flee (hit-and-run) judgment level threshold. If the player's level exceeds this value, enemies flee. Records with monsters have a median ≈ 33; empty records and boss battles are mostly 99 |
+| +0x1b | u8 | **battle BGM number** (dsno; `EncountData::setupData` → Encount+0xc4 → `DQSoundManager::playBattleBgm`). 16 `DQ7_BGM_M17_FIGHT` (212 records), 17 `M18_STRONGERS` (bosses, 63), 30 `M35_ORUGODEMIRA` (6), 0 (23) |
+| +0x1c | u8×8 | mid: weighted lottery table for the formation (enemy count/layout). `roll=rand(1..mid[7])`, the first `i` such that `roll<=mid[i]` is the template number. Template i0 = 1 enemy. Smaller values skew toward smaller formations |
+| +0x24 | u8 | zone-specific tuning value (range 11-41, bell-curve distribution). Confirmed on real hardware to have no effect on encounter frequency. Purpose unconfirmed |
+| +0x25 | u8 | special encounter id (`EncountSpecial::setup`, used when the formation roll picks template 12); mostly 0 |
+| +0x26 | u8 | bits 0-2: three flags, bits 5-7: a 3-bit value (`setupData`); 96 (0x60) for almost all records |
+| +0x27 | u8 | bits 0-2 and 3-5: two weights of a 3-way lottery made in `EncountData::setup` (with +0x28 bits 0-2) |
+| +0x28 | u8 | bits 0-2: third weight of that lottery; bits 3-5: a 3-bit value (`setupData`) |
+| +0x29-0x2e | 6 bytes = 12 nibbles | block 1: per-slot "appearance weight" table. Read low-nibble-first; the nibbles correspond 1:1 to `[A0,A1,A2,A3,A4, B0,B1,B2,B3, +0x18, +0x14, +0x16]` (`EncountData::setup` draws a slot with them). Empty slots always have weight 0, filled slots always have weight 1-9. Metal-type slots have a lower weight on average. +0x2e (the last two slots) is 0 in almost all records |
+| +0x2f-0x34 | 6 bytes = 12 nibbles | block 2: a table with the same slot mapping as block 1 (low-nibble-first, empty slot = 0); `setupData` passes each through `btl::getAppearCount` (a count) |
+| +0x35-0x37 | 3 bytes | `FF FF FF` in almost all records |
+
+(Correction: an earlier version of this table counted records from a
+16-byte header, so every offset was 4 too large — the `00 FF FF FF`
+"marker at +0x00" was the end of the previous record, the "reserved" +0x18
+u16×2 are slots 11-12, and the
+"+0x1f always 16" constant is the battle BGM number above.)
 
 Special value: records (12 of them) where arrayA contains 991-999 are
 special codes outside the normal monster ID range (presumed to be slots
@@ -158,7 +175,7 @@ unconfirmed.
 Within the range tested by changing fields on real hardware —
 `dq7_encount_data.dat` (+0x1e, +0x28, the tail region),
 `dq7_ai_param.dat` (174 records × 48 bytes, +0x24-0x28), and
-`dq7_floor_param.dat` (+0x04) — **no field controlling the actual symbol
+`dq7_floor_param.dat` (+0x04; offsets of the old 16-byte-header reading) — **no field controlling the actual symbol
 spawn frequency / encounter occurrence frequency on the field has been
 found in RomFS-side data**. Frequency control is believed to live in the
 ExeFS-side executable code.
