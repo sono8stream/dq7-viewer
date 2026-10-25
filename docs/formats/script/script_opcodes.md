@@ -97,6 +97,13 @@ itself. Interpreted as `int32[]`:
 | 4 | u32 | small sequential value, purpose unknown |
 | 8,12,16 | f32×3 | purpose unknown (possibly coordinates, but unverified; a separate region from the NPC placement block below) |
 
+**Correction (2026-10-25):** this is the same 48 bytes as the NPC Placement
+Info Block below, not a separate region. The proc-ref table's first entry has
+relative offset 0, i.e. it starts right after the object header. A rebuild of
+every SCRIPT file from (placement, initialize, execute, terminate) reproduces
+the original bytes, which confirms there is no other 48-byte region. The
+table above misread it: +4 is the model, and +8 is the facing (not f32).
+
 ## NPC Placement Info Block (right after the object header, 48 bytes)
 
 Right after each scriptobject's header there is a fixed-size, fixed-offset
@@ -105,9 +112,9 @@ insertion/deletion logic (can be overwritten directly in 4-byte units).
 
 | Offset | Type | Contents | Verification status |
 | --- | --- | --- | --- |
-| 0 | u32 | purpose unknown (sequential value) | unconfirmed |
-| 4 | u32 | the NPC's display model/actor ID | **confirmed** (rewriting it changes the displayed model on real hardware) |
-| 8 | u32 | purpose unknown (type flag or facing) | unconfirmed |
+| 0 | u32 | speaker ID: the `#NNNN` that starts the object's own lines (2000+ for townspeople, the model number for named characters) | **confirmed from data**: in 12,605 of 12,938 MSG commands of placed objects across all SCRIPT files, the message's `#NNNN` equals this value (the rest are other speakers in cutscenes, or `#9999` narration) |
+| 4 | u32 | the NPC's display model/actor ID (`CHARACTER/p%04d`) | **confirmed** (rewriting it changes the displayed model on real hardware) |
+| 8 | u32 | facing, 0-3 | likely: always 0-3 (23,712 placed objects); the same field order as DS DQ4's `PlacementParameter` (ctrlId, charaIndex, dir, x, y, z), whose dir is 0-3 quarter turns (0 = facing +z). Not tested on hardware |
 | 12 | f32 | map coordinate X | **confirmed** (rewriting it on real hardware changes the display position) |
 | 16 | f32 | map coordinate Y (height) | **confirmed** |
 | 20 | f32 | map coordinate Z | **confirmed** |

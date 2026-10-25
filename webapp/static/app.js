@@ -388,7 +388,7 @@ function renderTree(tree) {
       if (o.npc_placement) {
         const np = o.npc_placement;
         const lowConf = np.confidence === 'low' ? '?' : '';
-        placementHtml = ` <span class="npc-placement" title="model#・座標(pos_x/y/z)は実機検証済み。unk_type_flag等その他フィールドは仮説段階">model#${np.npc_model_id}${lowConf} @(${np.pos_x}, ${np.pos_z})</span>`;
+        placementHtml = ` <span class="npc-placement" title="model#・座標(pos_x/y/z)は実機検証済み。speaker_id(+0)はセリフの#番号と一致、direction(+8)は向き0〜3(実機未確認)">model#${np.npc_model_id}${lowConf} @(${np.pos_x}, ${np.pos_z})</span>`;
       }
       oSummary.innerHTML = `obj ${o.index} <span class="tag-name">${escapeHtml(o.tag)}</span>` +
         (hasText ? ' <span style="color:#9fd18a">●</span>' : '') + placementHtml;
@@ -704,8 +704,8 @@ function showObjectDetail(o, focusField) {
     'この編集機能で各値を書き換えてCIA再ビルド・実機テストしたところ、対象NPCの',
     '表示位置(X/Y/Z座標)がそれぞれ実際に変化した。マップ座標フィールドと確定。',
     '',
-    '根拠(unk_instance_id/unk_type_flag等その他フィールド、まだ仮説): m01nk1f1.bin内で、',
-    '同じ(unk_instance_id, npc_model_id)の組が複数のグループ(時間帯/天候違い等の',
+    '根拠(speaker_id/direction): m01nk1f1.bin内で、',
+    '同じ(speaker_id, npc_model_id)の組が複数のグループ(時間帯/天候違い等の',
     'バリエーションと推測)にまたがって出現し、その都度pos_x/pos_zだけが異なっていた',
     '（同一NPCが場面ごとに立ち位置を変えて再配置されているのと整合する）。詳細は',
     'docs/party_add_remove_command_investigation.md参照。',
