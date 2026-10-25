@@ -506,6 +506,10 @@ function renderTree(tree) {
             ? `CHOICE_MENU slots2-6=[${(c.slot_flags || []).join(',')}]`
             : c.name === 'SET_POSITION'
             ? `SET_POSITION x=${c.pos_x} y=${c.pos_y} z=${c.pos_z}`
+            : c.name === 'FACILITY_MENU'
+            ? `🏪 FACILITY_MENU ${c.facility} (${c.params[0]})`
+            : c.name === 'PLAYER_LOCK'
+            ? `PLAYER_LOCK ${c.params[0] ? 'on' : 'off'}`
             : c.name === 'MOVE_RANDOM'
             ? `🚶 MOVE_RANDOM x ${c.area.x0}..${c.area.x1} z ${c.area.z0}..${c.area.z1} speed#${c.speed_index}`
             : c.name === 'OBJECT_TOGGLE'
@@ -1150,6 +1154,14 @@ function showCommandDetail(c, o, p, ci) {
     lines.push(`  x=${c.pos_x}  y=${c.pos_y}  z=${c.pos_z}`);
     lines.push(`  NPC配置情報テーブルのpos_x/pos_y/pos_z(実機検証済み・上記docs参照)と同じ形。`);
     lines.push(`  こちらはスクリプト実行時にアクターを動的に移動させるコマンドと推測。まだ実機未検証。`);
+  }
+  if (c.name === 'FACILITY_MENU') {
+    lines.push(`FACILITY_MENU (確定 2026-10-25, CmdOpenFacilityMenu): opens a shop / inn / church / bank... menu`);
+    lines.push(`  type ${c.params[0]} = ${c.facility}. Shops, inns and churches look their row up by the map's area number`);
+    lines.push(`  (dq7_shop_general / dq7_shop_inn / dq7_shop_church). See docs/formats/script/script_opcodes.md.`);
+  }
+  if (c.command_class) {
+    lines.push(`command class: ${c.command_class} (from the ExeFS jump table; meaning of the params not decoded)`);
   }
   if (c.name === 'MOVE_RANDOM') {
     lines.push(`MOVE_RANDOM (確定 2026-10-25, CmdCharacterMoveRandom): walk at random inside a rectangle`);

@@ -35,6 +35,8 @@ import os
 import re
 import shutil
 import struct
+
+from dq7_command_classes import COMMAND_CLASSES
 import subprocess
 import sys
 import threading
@@ -425,6 +427,22 @@ SET_POSITION_OPCODE = 0x00010014
 # 長方形を4x4に区切ったマスの中心へランダムに歩かせる。最後の引数は
 # ScriptTypesUtility::speedTableToSpeedValueの段階(0..13 = 0.025..0.4単位/フレーム)。
 MOVE_RANDOM_OPCODE = 0x0001009D
+# 【確定 2026-10-25】0x2c = CmdOpenFacilityMenu(種類): CmdOpenFacilityMenu::initialize
+# のswitch。1〜6・0xc〜0x10・0x24・0x25 = MenuTrade::initShop(店。種類から
+# 店のkindを決め、getAreaIdAndShopKindToShopIdRecoad(地域, kind)で
+# dq7_shop_general.datの行を引く: 1→武器屋kind1, 2→防具屋kind2, 3→kind3 ...)、
+# 7/0x15/0x16 = 宿屋(地域→dq7_shop_inn.dat, +2が宿代)、8 = 教会
+# (地域→dq7_shop_church.dat)、9 = 銀行、0xa = コイン、0xb = カジノ景品、
+# 0x11 = 名前、0x12〜0x14 = 職業、0x17〜0x19 = セーブ、0x1c = コンテスト、
+# 0x26 = すれちがい、0x27 = 移民の町。
+FACILITY_MENU_OPCODE_LO = 0x2c
+_FACILITY_TYPES = {1: 'shop(weapon)', 2: 'shop(armour)', 3: 'shop(kind 3)', 4: 'shop(weapon)', 5: 'shop(kind 5)',
+                   6: 'shop', 7: 'inn', 8: 'church', 9: 'bank', 10: 'coin exchange', 11: 'casino prizes',
+                   0xc: 'shop(weapon, next row)', 0xd: 'shop(armour, next row)', 0xe: 'shop(kind 3, next row)',
+                   0xf: 'shop(kind 4, next row)', 0x10: 'shop(kind 5, next row)', 0x11: 'name change',
+                   0x12: 'job', 0x13: 'job', 0x14: 'job', 0x15: 'inn', 0x16: 'inn', 0x17: 'save', 0x18: 'save',
+                   0x19: 'save', 0x1c: 'contest', 0x24: 'shop(kind 8)', 0x25: 'shop(kind 6)', 0x26: 'StreetPass',
+                   0x27: 'immigrant town'}
 _MOVE_SPEEDS = [0.025, 0.05, 0.075, 0.1, 0.11, 0.12, 0.13, 0.14, 0.15, 0.175, 0.2, 0.25, 0.3, 0.4]
 
 # 【確定 2026-08-30】object有効/無効切り替え - ユーザーが実機で発見・確定。
@@ -1989,6 +2007,11 @@ def _decode_command(raw: bytes) -> dict:
         out['pos_x'] = round(struct.unpack('<f', struct.pack('<I', params[0]))[0], 4)
         out['pos_y'] = round(struct.unpack('<f', struct.pack('<I', params[1]))[0], 4)
         out['pos_z'] = round(struct.unpack('<f', struct.pack('<I', params[2]))[0], 4)
+    elif (opcode & 0xFFFF) == FACILITY_MENU_OPCODE_LO and len(params) >= 1:
+        out['name'] = 'FACILITY_MENU'
+        out['facility'] = _FACILITY_TYPES.get(params[0], f'type {params[0]}')
+    elif (opcode & 0xFFFF) == 0x13 and len(params) >= 1:
+        out['name'] = 'PLAYER_LOCK'      # CmdPlayerLock: 1 = stop the player while the NPC talks, 0 = release
     elif opcode == MOVE_RANDOM_OPCODE and len(params) >= 5:
         out['name'] = 'MOVE_RANDOM'
         f = [round(struct.unpack('<f', struct.pack('<I', v))[0], 4) for v in params[:4]]
@@ -2056,7 +2079,10 @@ def _decode_command(raw: bytes) -> dict:
         else:
             out['count_suspicious'] = True
     else:
-        out['name'] = f'op_{opcode:08x}'
+        cls = COMMAND_CLASSES.get(opcode & 0xFFFF)
+        out['name'] = f'op_{opcode:08x}' + (f' {cls}' if cls else '')
+        if cls:
+            out['command_class'] = cls
 
     return out
 
