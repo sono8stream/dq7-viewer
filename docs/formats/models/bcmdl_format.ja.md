@@ -99,8 +99,8 @@ Shapeは`PositionOffset`(`+0x20`)を持ち、最終頂点位置に加算する�
 
 ```
 +0x00  typeFlag 0x40000002
-+0x14  i32 selfRel -> 頂点ストリーム本体
-+0x18  u32 ストリームのバイト長
++0x14  u32 ストリームのバイト長
++0x18  i32 selfRel -> 頂点ストリーム本体(IMAG内)
 +0x24  stride
 +0x28  attrCount, +0x30.. selfRel配列 -> 属性ディスクリプタ(GfxAttribute)
 ```
@@ -109,13 +109,21 @@ Shapeは`PositionOffset`(`+0x20`)を持ち、最終頂点位置に加算する�
 
 ```
 +0x00  typeFlag 0x40000001
-+0x04  usage (0=position, 1=normal, 4=uv0, 5=uv1, 8=boneWeight; boneIndexは別途FixedVertexAttribute経由)
-+0x24  format (GL enum: 0x1406=FLOAT, 0x1401=UBYTE, 0x1402=SHORT, 0x1403=USHORT)
++0x04  usage (0=position, 1=normal, 3=color, 4=uv0, 5=uv1, 6=uv2, 7=boneIndex, 8=boneWeight;
+       一定値のboneIndex / boneWeightはFixedVertexAttributeになることもある)
++0x24  format (GL enum: 0x1406=FLOAT, 0x1400=BYTE, 0x1401=UBYTE, 0x1402=SHORT, 0x1403=USHORT)
 +0x28  elements(componentCount; position=3, uv=2, boneWeight=4)
 +0x2c  scale (f32)
 +0x30  offset
 ```
 最終値 = raw × scale。
+
+キャラクターモデルには全部floatのレイアウト(例: `p0122`: stride 56、position/normal/
+uv0〜2がfloat、boneIndexがubyte、boneWeightがubyte×0.01)と量子化されたレイアウト
+(例: `p0188`: stride 28、positionはShapeのPositionOffsetからの相対でbyte×0.00928、
+uv0はubyte×0.00397)の両方がある。レイアウトはこのディスクリプタのフィールドと
+バッファのstrideだけで決まる(GPUコマンドはロード時に組み立てられる)ので、
+format / scale / offsetとstrideを書き換えれば別のレイアウトで書き直せる。
 
 ### GfxSubMesh / 頂点影響(スキニング)
 
@@ -139,6 +147,23 @@ GfxFaceDescriptor:
    並びにそのまま対応する(positional correspondence)。
 
 ウェイトの合計は常に≈1.0。
+
+### IMAGを指すポインタ
+
+DATAからIMAGブロック(生データ)を指すポインタは次のどれかだけ:
+
+| フィールド | 長さフィールド |
+| --- | --- |
+| InterleavedVertexBuffer `+0x18` | `+0x14` |
+| GfxFaceDescriptor `+0x0c` | `+0x08` |
+| テクスチャImageData `+0x0c` | `+0x08` |
+
+`p0012` / `p0072` / `p0122`のDATAの全32bitワードを走査し、自己相対の行き先がIMAGに
+入るワードはこれ以外に無いことを確認した(フラグや個数の小さい定数`0x0001xxxx`が
+偶然IMAGに届くものを除く)。したがって頂点・インデックス・テクセルは、新しいデータを
+IMAGの末尾(0x80境界)に足してこれらのフィールドを付け替え、IMAGの長さとファイル
+サイズ(`+0x0c`)を直せば差し替えられる。個数のフィールドは無い(頂点数・インデックス
+数はバイト長から決まる)。
 
 ## スケルトン・バインドポーズ
 

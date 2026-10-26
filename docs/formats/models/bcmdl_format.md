@@ -109,8 +109,8 @@ position.
 
 ```
 +0x00  typeFlag 0x40000002
-+0x14  i32 selfRel -> vertex stream body
-+0x18  u32 byte length of the stream
++0x14  u32 byte length of the stream
++0x18  i32 selfRel -> vertex stream body (in IMAG)
 +0x24  stride
 +0x28  attrCount, +0x30.. selfRel array -> attribute descriptors (GfxAttribute)
 ```
@@ -119,13 +119,22 @@ position.
 
 ```
 +0x00  typeFlag 0x40000001
-+0x04  usage (0=position, 1=normal, 4=uv0, 5=uv1, 8=boneWeight; boneIndex goes through a separate FixedVertexAttribute)
-+0x24  format (GL enum: 0x1406=FLOAT, 0x1401=UBYTE, 0x1402=SHORT, 0x1403=USHORT)
++0x04  usage (0=position, 1=normal, 3=color, 4=uv0, 5=uv1, 6=uv2, 7=boneIndex, 8=boneWeight;
+       a constant boneIndex / boneWeight can instead be a FixedVertexAttribute)
++0x24  format (GL enum: 0x1406=FLOAT, 0x1400=BYTE, 0x1401=UBYTE, 0x1402=SHORT, 0x1403=USHORT)
 +0x28  elements (componentCount; position=3, uv=2, boneWeight=4)
 +0x2c  scale (f32)
 +0x30  offset
 ```
 Final value = raw × scale.
+
+Character models use both all-float layouts (e.g. `p0122`: stride 56, float
+position/normal/uv0-2, ubyte boneIndex, ubyte boneWeight × 0.01) and
+quantized ones (e.g. `p0188`: stride 28, byte position × 0.00928 relative to
+the shape's PositionOffset, ubyte uv0 × 0.00397). The layout lives entirely in
+these descriptor fields and the buffer's stride (the GPU commands are built
+at load time), so a buffer can be rewritten with another layout by changing
+format / scale / offset and the stride.
 
 ### GfxSubMesh / per-vertex bone influence (skinning)
 
@@ -150,6 +159,24 @@ Per-vertex bone influence (up to 4) is expressed in one of two patterns:
    order of the `boneIndices` array.
 
 The sum of weights is always ≈1.0.
+
+### Pointers into IMAG
+
+Every pointer from DATA into the IMAG block (raw data) is one of:
+
+| field | length field |
+| --- | --- |
+| InterleavedVertexBuffer `+0x18` | `+0x14` |
+| GfxFaceDescriptor `+0x0c` | `+0x08` |
+| texture ImageData `+0x0c` | `+0x08` |
+
+A scan of every 32-bit word of DATA in `p0012` / `p0072` / `p0122` found no
+other word whose self-relative target lands in IMAG, apart from small
+constants (`0x0001xxxx`, flags and counts) that land there by chance. Vertex,
+index and texel data can therefore be replaced by appending new blobs to IMAG
+(0x80-aligned), repointing these fields and fixing the IMAG length and the
+file size (`+0x0c`); no count field has to change (vertex / index counts are
+derived from the byte lengths).
 
 ## Skeleton / bind pose
 
