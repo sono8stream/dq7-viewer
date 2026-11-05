@@ -50,9 +50,34 @@ From the ExeFS code (base-ROM virtual addresses):
   mapper `mapper`: eyes use the mapper stored at `[this+0x7d0]` (= 1),
   the mouth `[this+0x7d4]` (= 2, or 1 when the character has no eyes),
   both set from the character record's flags (`+0x50` bit 1, `+0x51`).
+- That record is the model's row of `LEVELDATA/dq7_chara_list.dat` (84-byte
+  rows after the 20-byte header; `+0x48` u16 model number, `+0x4A` `pNNNN`):
+
+  | Field | Value | Meaning |
+  | --- | --- | --- |
+  | `+0x50` bit 1 | set | eye animation (mapper 1) |
+  | `+0x51 & 3` | 0 | no mouth animation (712 of 927 rows) |
+  | `+0x51 & 3` | 1 | mouth textures (173 rows) |
+  | `+0x51 & 3` | 2 | no mouth textures: `CharacterObject` calls vtable `+0x13C` with 8 instead; `LipSyncRemoteControl::jawExec` / `jawStart` are the jaw-bone counterpart (42 rows, e.g. p0184, p0158) |
+
+  A model number with no row has no face animation: `setupFaceAnimation`
+  returns early.
 - In all 307 models with a face file, FaceMaterial's eye stage holds a
   texture named `<x>_e0` and the mouth stage `<x>_m0`: eye 1 + mouth 2
   (234 models), eye 1 only (72), mouth 1 only (1).
+- Texture size fields of a TXOB: `+0x18` height, `+0x1C` width (mouth images
+  are 64 wide and 32 high, not the other way round).
+- A FaceMaterial with no mouth stage differs from one with it only in:
+  `+0x168` used texture coords (2 -> 3), TextureCoords[2] (`+0x16C + 2*0x58`),
+  TextureMappers[2] (pointer at `+0x27C`), the hashes at `+0x2A8` / `+0x2AC` /
+  `+0x2C8`, and TexEnv stage 1 (`033f055f / 300 / 4`: Interpolate(Previous,
+  Texture2, Texture2 alpha)), the later stages one place on. A TexEnv stage is
+  0x1C bytes: source, header, operand, combiner, colour, scale, then one word
+  that is not part of the stage.
+- Mouth uv: a flat projection from the front. `u` is proportional to `|x|`
+  (u = 0 on the centre line, the image holds half a mouth, mirrored) and `v`
+  to `y`. Some models hold the half the other way round, a few (p0014) a whole
+  mouth with `u` proportional to `x`.
 
 What the slots look like (e.g. NPC p0122): `e1` eyes closed, `e2` narrowed
 eyes, `m1` / `m2` / `m6` open mouths of different sizes.

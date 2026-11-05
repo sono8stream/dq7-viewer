@@ -1158,6 +1158,7 @@ def _shape_frag_blends(cg, n_shapes):
 # naive "uv{stage}" assumption in 12 of ~158 materials (~7.6%) - a real,
 # non-rare class of bug, not a one-off.
 _TEXCOORD0_OFF = 0x16C
+_MAPPERS_OFF = 0x274         # GfxMaterial: TextureMappers[3], self-relative pointers
 _TEXCOORD_STRIDE = 0x58
 
 
@@ -1226,6 +1227,14 @@ def _materials(cg, ext_tex_names=None):
                 s = cg.cstr(p) if p else ''
                 if s in tex_names and s not in names:
                     names.append(s)
+            # a TextureMapper outside the record (added after the fact, not
+            # how the game's own models are laid out): by its pointer
+            for k in range(3):
+                p = cg.ref(mo + _MAPPERS_OFF + k * 4)
+                if p and not mo < p < next_start[mo]:
+                    s = cg.cstr(cg.ref(p + 0x64))
+                    if s in tex_names and s not in names:
+                        names.append(s)
             end = next_start[mo]
             alpha = _alpha_test(cg, mo, end)
             side = _cull_mode(cg, mo, end)
