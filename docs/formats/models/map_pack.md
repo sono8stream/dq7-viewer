@@ -93,7 +93,9 @@ name is 0x10 earlier):
 | `+0x50` | vec4 | scale |
 | `+0x60` | vec4 | bounding box min, part-local |
 | `+0x70` | vec4 | bounding box max, part-local |
-| `+0x80` | 0x30 bytes | type/part-specific parameters (not decoded) |
+| `+0x80` | u32 | object number: `DQMapManager::setupDoor` finds a door by it; `FldModel2::isCommandCacheObject` treats a NoChange part (see `NRML`) as static only when this is 0 |
+| `+0x84` | u32 | placement class × 100 + n: `DQMapManager::setupPlacement` switches on `/100` (37 well, 17 / 28 / 31 / 54 items and furniture, 50 door, 51 steps; other classes are not handled there); map trees use 48xx, the same number as their kind-4 collision walls (`COLL`) |
+| `+0x88` | 0x28 bytes | mostly not decoded. Trees: `+0x90` u32 1, `+0x94` f32 (5.0 `wlwd08`/`08b`, 3.0 `wlwd03b`, 0 `wlwd02b`/`08c`), `+0x98` f32 (10 / 8 / 5), `+0x9c` f32 1.0, `+0xa0` f32 80 or 120 (probably the sway); `+0xa4` bit 0 and `+0xa8` f32 are read by `FldModel2::setupModelOne` |
 
 Part geometry is in part-local coordinates: for unskinned parts the node's
 bounding box is exactly the part's vertex extent. The world placement is
@@ -110,7 +112,13 @@ record count at `+0x08`:
 
 - `NRML`: 0x30-byte records from `+0x10`, name at `+0x00`. `NRML[i]` is
   `FldData` *i*. GNOD nodes reference only these parts (part index < NRML
-  count).
+  count). `+0x20` u32 is the part's draw flags (`FldModelFile`):
+  `isDistanceErace` = `& 0x08`, `isCommandCache` = `& 0x10`,
+  `isNoChange` = `(& 0x6e) == 0`. `FldModel2::build` draws a NoChange part
+  whose node has `+0x80` == 0 from a command list built once
+  (`FldModel2::isCommandCacheObject`), so bone billboards (tree leaf cards)
+  in such a part keep their first direction. DQ7's trees are `0x28`, its sky
+  and sea parts `0x02`, its terrain and backdrop parts `0`.
 - `CMMN`: animated common objects (doors etc., names like `a_wdoor02_1`)
   whose `FldData` follow the NRML ones. They are not placed by `WNOD`.
   Record layout not decoded.
@@ -134,7 +142,7 @@ Polygon record:
 | Offset | Type | Contents |
 | --- | --- | --- |
 | `+0x00` | u32 | `1` = quad, `0` = triangle (4th vertex zero-filled) |
-| `+0x04` | u32[3] | attributes: `+0x04` u16 kind (0 wall, 1/2 floor, 3 event floor, 4 numbered wall: map objects, number at `+0x06`), `+0x0a` u16 exit id, `+0x0c` u16 flags: `1` = exit (`DQMapManager::setupExitInfo` takes exactly 1), `0x10` = counter (`PlayerManager::selectSpeekChara` casts a ray from the player to the NPC and lets it pass a polygon whose `+0x0c` is exactly 0x10, with `+0x0e & 0x2000` clear, if the crossing is within 1.6 of the player; e.g. `c04pf2`'s inn counter: kind 0, `+0x0a` 1, `+0x0c` 0x10). Numbered walls: the ray may pass number 800 (church lectern) and some 7xx / 15xx. Other words not decoded |
+| `+0x04` | u32[3] | attributes: `+0x04` u16 kind (0 wall, 1/2 floor, 3 event floor, 4 numbered wall: map objects, number at `+0x06`), `+0x0a` u16 exit id, `+0x0c` u16 flags: `1` = exit (`DQMapManager::setupExitInfo` takes exactly 1), `0x10` = counter (`PlayerManager::selectSpeekChara` casts a ray from the player to the NPC and lets it pass a polygon whose `+0x0c` is exactly 0x10, with `+0x0e & 0x2000` clear, if the crossing is within 1.6 of the player; e.g. `c04pf2`'s inn counter: kind 0, `+0x0a` 1, `+0x0c` 0x10). Numbered walls: map trees have a ring of 4-8 of them round the trunk (the same shape for every tree of a kind, in the node's rotation and scale; height part-local −1 to 1.5), numbered as the tree node's `+0x84`, `+0x0e` = 0x100. The ray may pass number 800 (church lectern) and some 7xx / 15xx. Other words not decoded |
 | `+0x10` | vec4[4] | vertices in perimeter order (w = 0) |
 | `+0x50` | vec4 | face normal |
 | `+0x60` | vec4 | bounding box min (w = 1) |
@@ -172,7 +180,7 @@ not listed.
 
 ## Unresolved points
 
-- Meaning of the `GNOD` `+0x80` parameters, `CMMN` record layout and how
+- Most of the `GNOD` `+0x88` parameters, `CMMN` record layout and how
   CMMN objects are placed.
 - `COLL` sections other than `PLGN`, and the `PLGN` attribute words.
 - `PARM` `CAMR` and `FOG ` fields.
