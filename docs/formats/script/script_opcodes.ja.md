@@ -276,9 +276,9 @@ NPCを実際にゲームで動かして確認）の結果、正しくは次の�
 | `0x17` | `CmdObjectWait` | `[フレーム]` | このオブジェクトが待つ |
 | `0x11` | `CmdFadein` | `[種類, ?, フレーム]` | 0＝フェードイン、1＝フェードアウト（2・3は別フラグの同じもの） |
 | `0x18` | `cmdSetObjectDirection` | `[type]` | 0→0°、1→270°、2→180°、3→90°（`ScriptTypesUtility::typeToDirection`。5→225°、7→45°） |
-| `0x1c` | `CmdSetCameraAngle` | `[軸, 角度, フレーム, 即時, 相対]` | カメラに対して。軸0＝x、1＝y、2＝z。DQ7は`[1, 180, 0, 1, 0]`で標準の向きに戻す（490回） |
+| `0x1c` | `CmdSetCameraAngle` | `[軸, 角度(f32), フレーム, 即時, 相対]` | カメラに対して。軸0＝x、1＝y、2＝z。DQ7は`[1, 180.0, 0, 1, 0]`で標準の向きに戻す（490回） |
 | `0x20` | `CmdMapChangeExit` | `[フロア, 出口, 効果音]` | そのフロアの出口の多角形へ移動（`MapLinkManager::search(フロア, 出口)`） |
-| `0x52` | `cmdIsObjectDirection` | `[角度, 許容]` | 条件: このオブジェクトの向きが許容内 |
+| `0x52` | `cmdIsObjectDirection` | `[角度, 許容]`（どちらもf32。例: `t02nf4` `[0.0, 1.0]`） | 条件: このオブジェクトの向きが許容内 |
 | `0x7e` | `CmdSetSurfaceOnOff` | `[出口, on, on]` | その番号の出口の多角形を有効/無効にする（実行時の0x1000） |
 | `0x87` | `CmdChangeMapLink` | `[フロア, 出口A, 出口B]` | マップのつながりを差し替える（DQ4の`cmd_change_map_link`と同じ並び） |
 | `0xa3` | `CmdObjectMoveStart` | `[1]` | このオブジェクトの歩きを始める |

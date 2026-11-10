@@ -319,9 +319,9 @@ townspeople use 2000-2012 there too.
 | `0x17` | `CmdObjectWait` | `[frames]` | this object waits |
 | `0x11` | `CmdFadein` | `[mode, ?, frames]` | mode 0 fade in, 1 fade out (2 / 3: the same with another flag) |
 | `0x18` | `cmdSetObjectDirection` | `[type]` | 0 → 0°, 1 → 270°, 2 → 180°, 3 → 90° (`ScriptTypesUtility::typeToDirection`; 5 → 225°, 7 → 45°) |
-| `0x1c` | `CmdSetCameraAngle` | `[axis, degrees, frames, at once, relative]` | on the camera; axis 0 x / 1 y / 2 z. DQ7 resets the view with `[1, 180, 0, 1, 0]` (490 times) |
+| `0x1c` | `CmdSetCameraAngle` | `[axis, degrees (f32), frames, at once, relative]` | on the camera; axis 0 x / 1 y / 2 z. DQ7 resets the view with `[1, 180.0, 0, 1, 0]` (490 times) |
 | `0x20` | `CmdMapChangeExit` | `[floor, exit, sound]` | go to the floor, arriving at its exit polygon (`MapLinkManager::search(floor, exit)`) |
-| `0x52` | `cmdIsObjectDirection` | `[degrees, tolerance]` | condition: this object faces within the tolerance |
+| `0x52` | `cmdIsObjectDirection` | `[degrees, tolerance]` (both f32, e.g. `t02nf4` `[0.0, 1.0]`) | condition: this object faces within the tolerance |
 | `0x7e` | `CmdSetSurfaceOnOff` | `[exit, on, on]` | enables / disables the exit polygons with that number (runtime flag 0x1000) |
 | `0x87` | `CmdChangeMapLink` | `[floor, exit A, exit B]` | redirects a map link (same order as DQ4's `cmd_change_map_link`) |
 | `0xa3` | `CmdObjectMoveStart` | `[1]` | starts a walk of this object |
