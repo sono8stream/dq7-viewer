@@ -445,6 +445,26 @@ _FACILITY_TYPES = {1: 'shop(weapon)', 2: 'shop(armour)', 3: 'shop(kind 3)', 4: '
                    0x27: 'immigrant town'}
 _MOVE_SPEEDS = [0.025, 0.05, 0.075, 0.1, 0.11, 0.12, 0.13, 0.14, 0.15, 0.175, 0.2, 0.25, 0.3, 0.4]
 
+# 【確定 2026-11-10】Event commands, params read from each class's initialize (Ghidra; docs/formats/script/
+# script_opcodes.md "Event commands"). They act on the object running them; an object whose placement model is
+# 2010 is the player the pad moves, 4001 the camera (ObjectAccess::getScriptObject).
+# low16: (name, min params, param kinds i/f, note)
+_EVENT_COMMANDS = {
+    0x06: ('SYSTEM_WAIT', 1, 'i', 'CmdSystemWait [frames]: wait (no object needed)'),
+    0x17: ('OBJECT_WAIT', 1, 'i', 'CmdObjectWait [frames]: this object waits'),
+    0x11: ('FADE', 3, 'iii', 'CmdFadein [0 fade in / 1 fade out (2, 3: the same, other flag), ?, frames]'),
+    0x18: ('SET_DIRECTION', 1, 'i', 'cmdSetObjectDirection [type]: 0 = 0 deg, 2 = 180, 3 = 90, 1 = 270 (5 = 225, 7 = 45...)'),
+    0x1c: ('SET_CAMERA_ANGLE', 5, 'iiiii', 'CmdSetCameraAngle [axis 0 x / 1 y / 2 z, degrees, frames, at once, relative] on the camera; DQ7 resets the view with [1, 180, 0, 1, 0]'),
+    0x20: ('MAP_CHANGE_EXIT', 2, 'iii', 'CmdMapChangeExit [floor, exit, sound]: go to that floor, arriving at its exit polygon (MapLinkManager::search)'),
+    0x52: ('IF_DIRECTION', 2, 'ii', 'cmdIsObjectDirection [degrees, tolerance]: true when this object faces within tolerance'),
+    0x7e: ('SURFACE_ON_OFF', 2, 'iii', 'CmdSetSurfaceOnOff [exit, on, on]: enables / disables the exit polygons with that number'),
+    0x87: ('CHANGE_MAP_LINK', 3, 'iii', 'CmdChangeMapLink [floor, exit A, exit B]: redirects a map link (the same order as DQ4 cmd_change_map_link)'),
+    0xa3: ('MOVE_START', 1, 'i', 'CmdObjectMoveStart [1]: start a walk of this object'),
+    0xa4: ('MOVE_END', 1, 'i', 'CmdObjectMoveEnd [0]: walk the points given and wait for the arrival'),
+    0xa5: ('MOVE_POINT', 3, 'fffii', 'CmdObjectMovePoint [x, y, z, ?, ?]: a point of the walk'),
+    0xa9: ('MOVE_SPEED', 1, 'i', 'CmdSetObjectMoveSpeed [speed index]: 0..13 = 0.025..0.4 units/frame (3 = 0.1)'),
+}
+
 # 【確定 2026-08-30】object有効/無効切り替え - ユーザーが実機で発見・確定。
 # params=[target]: 対象は同じgroup内の「(target+1)番目のobject」(0-based
 # index target+1)。docs/script_object_insertion.md の「乗っ取りでもobj9だけ
@@ -484,16 +504,18 @@ _warp_index_cache = None
 def parse_floor_list_full() -> list:
     """Parse LEVELDATA/dq7_floor_list.dat -> ordered list of records.
 
-    Record layout (16 bytes, table starts at 0x20): +0x00 u32 (unused, 0
-    in every observed row), +0x04 u16 floor_id (the value opcode
-    0x0001001f's param[0] carries), +0x06 u16 group idx, +0x08 char[8]
-    mapcode name (e.g. 'm01nm2f2', 'c01nout', 'wld_n25a'). Verified: the
-    row named 'm01nm2f2' has floor_id 407, matching the user's
-    observation, and 'c01nf1' -> 2, 'h01nout1' -> 301, etc.
+    Layout (as LevelDataUtility::getMapIdToMapName / getMapIdToAreaNo read it, ExcelBinaryData::
+    getRecordDynamic: records at +0x14): a 20-byte header (+0x04 record count, +0x08 record size 16),
+    then 16-byte records: +0x00 u16 floor_id (the value opcode 0x0001001f's param[0] carries),
+    +0x02 u16 area number, +0x04 char[12] map code (e.g. 'm01nm2f2', 'c01nout', 'wld_n25a').
 
-    Each returned dict: {rec_index, floor_id, group, mapcode, unk0,
-    raw_hex}. Rows with an empty mapcode (blank/padding slots that still
-    consume an id) are kept so rec_index stays meaningful.
+    [Corrected 2026-11-10] This used to read the table from 0x20 with the floor id at +0x04 and an
+    8-character name at +0x08 - the same fields of the next record, cut to 8 characters (names of
+    9-11 characters such as 'm40nmlm1f1' lost their tail). The values looked right because every
+    field was shifted by the same 16 bytes.
+
+    Each returned dict: {rec_index, floor_id, group (= area), mapcode, raw_hex}. Rows with an empty
+    mapcode (blank slots) are kept so rec_index stays the row number.
     """
     global _floor_list_full_cache
     if _floor_list_full_cache is not None:
@@ -506,17 +528,14 @@ def parse_floor_list_full() -> list:
     except OSError:
         _floor_list_full_cache = out
         return out
-    off = 0x20
-    idx = 0
-    while off + 16 <= len(data):
+    count = struct.unpack_from('<I', data, 4)[0] if len(data) >= 0x14 else 0
+    for idx in range(count):
+        off = 0x14 + idx * 16
+        if off + 16 > len(data):
+            break
         rec = data[off:off + 16]
-        unk0 = struct.unpack_from('<I', rec, 0)[0]
-        fid = struct.unpack_from('<H', rec, 4)[0]
-        grp = struct.unpack_from('<H', rec, 6)[0]
-        mapcode = rec[8:16].split(b'\x00')[0].decode('ascii', 'replace')
-        # printable mapcodes only - the world-map tail of the table has a
-        # few rows whose name bytes aren't clean ascii; skip labelling
-        # those but still count the slot.
+        fid, grp = struct.unpack_from('<HH', rec, 0)
+        mapcode = rec[4:16].split(b'\x00')[0].decode('ascii', 'replace')
         if any(ord(c) < 0x20 or ord(c) > 0x7e for c in mapcode):
             mapcode = ''
         out.append({
@@ -524,11 +543,8 @@ def parse_floor_list_full() -> list:
             'floor_id': fid,
             'group': grp,
             'mapcode': mapcode,
-            'unk0': unk0,
             'raw_hex': rec.hex(),
         })
-        off += 16
-        idx += 1
     _floor_list_full_cache = out
     return out
 
@@ -2091,6 +2107,16 @@ def _decode_command(raw: bytes) -> dict:
                 out['text'] = ''.join(text_parts)
         else:
             out['count_suspicious'] = True
+    elif (opcode & 0xFFFF) in _EVENT_COMMANDS and len(params) >= _EVENT_COMMANDS[opcode & 0xFFFF][1]:
+        name, _n, fmt, note = _EVENT_COMMANDS[opcode & 0xFFFF]
+        out['name'] = name
+        vals = [round(struct.unpack('<f', struct.pack('<I', v))[0], 4) if k == 'f' else
+                (v - (1 << 32) if v >= 1 << 31 else v) for k, v in zip(fmt, params)]
+        out['args'] = vals
+        out['label'] = f"{name} {vals}"
+        out['detail'] = note
+        if name in ('MAP_CHANGE_EXIT', 'CHANGE_MAP_LINK') and load_floor_list().get(params[0]):
+            out['label'] = f"🚪 {name} → {load_floor_list().get(params[0])} (#{params[0]}) {vals[1:]}"
     else:
         cls = COMMAND_CLASSES.get(opcode & 0xFFFF)
         out['name'] = f'op_{opcode:08x}' + (f' {cls}' if cls else '')

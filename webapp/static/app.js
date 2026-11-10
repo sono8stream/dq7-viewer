@@ -518,6 +518,8 @@ function renderTree(tree) {
             ? `🚪 MAP_WARP → ${c.dst_map_name ? `${c.dst_map_name} (#${c.dst_map_id})` : `map#${c.dst_map_id}`} @(${c.pos_x}, ${c.pos_y}, ${c.pos_z})`
             : c.name === 'MSG' && (c.turn_to_player !== undefined || c.repeat_mode !== undefined)
             ? `${c.turn_to_player === undefined ? '' : (c.turn_to_player ? '🗣→' : '🗣─')}${c.repeat_mode === undefined ? '' : (c.repeat_mode === 'repeats_every_time' ? '🔁' : '1️⃣')} ${c.text ? previewLabel(c.text) : ''}`
+            : c.label
+            ? c.label
             : (c.text ? previewLabel(c.text) : (c.name || c.opcode || ''));
           const indent = typeof c.indent === 'number' ? c.indent : null;
           if (indent !== null) {
@@ -1162,6 +1164,10 @@ function showCommandDetail(c, o, p, ci) {
   }
   if (c.command_class) {
     lines.push(`command class: ${c.command_class} (from the ExeFS jump table; meaning of the params not decoded)`);
+  }
+  if (c.detail) {
+    lines.push(`${c.name} (確定 2026-11-10): ${c.detail}`);
+    lines.push(`  args ${JSON.stringify(c.args)}. See docs/formats/script/script_opcodes.md "Event commands".`);
   }
   if (c.name === 'MOVE_RANDOM') {
     lines.push(`MOVE_RANDOM (確定 2026-10-25, CmdCharacterMoveRandom): walk at random inside a rectangle`);

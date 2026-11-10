@@ -258,3 +258,32 @@ NPCを実際にゲームで動かして確認）の結果、正しくは次の�
 (`setTalkScriptCharacter(..., 1)`とモーションのリモコン)が、`CmdMessage1`は向けない。
 ゲームのスクリプトでは、0x09はブロックの最後の命令か、直後が自分の`CmdMenuYesNo`
 (それ以外の1090件中1015件)。0x0b・0x0dの後には他の命令が続く(14,070件中14,065件)。
+
+## イベント用の命令（2026-11-10 確定）
+
+引数は各クラスの`initialize`（Ghidra）で確認した。命令を書いたオブジェクト自身に効く
+（`script::getPlacementCtrlId` → `ObjectAccess::getScriptObject`）。
+配置の**モデル番号**は、モデルではなく実在のキャラを指すことがある:
+2000〜2008＝パーティ、**2010＝操作中のプレイヤー**、3000＝マップ部品、
+3001＝イベント道具、4000・**4001＝カメラ**、5000＝エフェクト。DQ7は主人公を
+動かす場面をモデル2010のオブジェクトに書き（891個）、オブジェクト0が
+`OBJECT_TOGGLE`で出す（例: `c01nb2a` group 4）。配置の+0x00（actor・名前の番号）は
+別物で、普通の町人も2000〜2012を使う。
+
+| 下位16bit | クラス | 引数 | 意味 |
+| --- | --- | --- | --- |
+| `0x06` | `CmdSystemWait` | `[フレーム]` | 待つ |
+| `0x17` | `CmdObjectWait` | `[フレーム]` | このオブジェクトが待つ |
+| `0x11` | `CmdFadein` | `[種類, ?, フレーム]` | 0＝フェードイン、1＝フェードアウト（2・3は別フラグの同じもの） |
+| `0x18` | `cmdSetObjectDirection` | `[type]` | 0→0°、1→270°、2→180°、3→90°（`ScriptTypesUtility::typeToDirection`。5→225°、7→45°） |
+| `0x1c` | `CmdSetCameraAngle` | `[軸, 角度, フレーム, 即時, 相対]` | カメラに対して。軸0＝x、1＝y、2＝z。DQ7は`[1, 180, 0, 1, 0]`で標準の向きに戻す（490回） |
+| `0x20` | `CmdMapChangeExit` | `[フロア, 出口, 効果音]` | そのフロアの出口の多角形へ移動（`MapLinkManager::search(フロア, 出口)`） |
+| `0x52` | `cmdIsObjectDirection` | `[角度, 許容]` | 条件: このオブジェクトの向きが許容内 |
+| `0x7e` | `CmdSetSurfaceOnOff` | `[出口, on, on]` | その番号の出口の多角形を有効/無効にする（実行時の0x1000） |
+| `0x87` | `CmdChangeMapLink` | `[フロア, 出口A, 出口B]` | マップのつながりを差し替える（DQ4の`cmd_change_map_link`と同じ並び） |
+| `0xa3` | `CmdObjectMoveStart` | `[1]` | このオブジェクトの歩きを始める |
+| `0xa5` | `CmdObjectMovePoint` | `[x, y, z (f32), ?, ?]` | 歩く点 |
+| `0xa9` | `CmdSetObjectMoveSpeed` | `[番号]` | 0〜13＝0.025〜0.4単位/フレーム（3＝0.1。DQ7の歩きはこれ） |
+| `0xa4` | `CmdObjectMoveEnd` | `[0]` | 点を歩き、到着を待つ |
+
+到着時、プレイヤーは出口の多角形の法線の向きを向く（`DQMapManager::setupExitInfo`: `atan2(n.x, n.z)`）。

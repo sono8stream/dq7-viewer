@@ -23,7 +23,7 @@ DQ7I18N.extend({
     'floor.groupLabel': 'group',
     'floor.noNameLabel': '(名前なし)',
     'floor.layoutLabel': 'レイアウト',
-    'floor.layoutDesc': '+0x00 u32=(未使用) / +0x04 u16=フロアID / +0x06 u16=group / +0x08 char[8]=マップコード',
+    'floor.layoutDesc': '20byteヘッダの後、+0x00 u16=フロアID / +0x02 u16=地域番号 / +0x04 char[12]=マップコード',
     'floor.scriptFileLabel': '対応SCRIPTファイル',
     'floor.scriptFileNone': '(なし — SCRIPT/<mapcode>.bin が存在しない)',
     'floor.warpsInSection': 'このフロアへ入ってくる MAP_WARP',
@@ -53,7 +53,7 @@ DQ7I18N.extend({
     'floor.groupLabel': 'group',
     'floor.noNameLabel': '(no name)',
     'floor.layoutLabel': 'Layout',
-    'floor.layoutDesc': '+0x00 u32=(unused) / +0x04 u16=floor ID / +0x06 u16=group / +0x08 char[8]=map code',
+    'floor.layoutDesc': 'after a 20-byte header: +0x00 u16=floor ID / +0x02 u16=area number / +0x04 char[12]=map code',
     'floor.scriptFileLabel': 'Matching SCRIPT file',
     'floor.scriptFileNone': '(none — SCRIPT/<mapcode>.bin does not exist)',
     'floor.warpsInSection': 'MAP_WARP commands entering this floor',
@@ -209,7 +209,7 @@ function renderFloorDetail(d) {
   lines.push(`${t('floor.mapcodeLabel')} : ${r.mapcode || t('floor.noNameLabel')}`);
   lines.push(`${t('floor.groupLabel')}        : ${r.group}`);
   lines.push(`dq7_floor_list.dat record #${r.rec_index}  raw=${r.raw_hex}`);
-  lines.push(`  ${t('floor.layoutLabel')}: ${t('floor.layoutDesc').replace('+0x00 u32=', `+0x00 u32=${r.unk0} `)}`);
+  lines.push(`  ${t('floor.layoutLabel')}: ${t('floor.layoutDesc')}`);
   lines.push('');
   lines.push(`${t('floor.scriptFileLabel')} : ${d.script_file || t('floor.scriptFileNone')}`);
   lines.push('');

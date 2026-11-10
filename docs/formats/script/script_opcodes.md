@@ -300,3 +300,33 @@ the player (`setTalkScriptCharacter(..., 1)` and a motion remote control); `CmdM
 does not. In the game's scripts 0x09 is the last command of its block or is followed by
 its `CmdMenuYesNo` (1015 of 1090 otherwise); 0x0b / 0x0d are followed by more commands
 (14,065 of 14,070).
+
+## Event commands (confirmed 2026-11-10)
+
+Parameters read from each class's `initialize` (Ghidra). They act on the
+object running them (`script::getPlacementCtrlId` → `ObjectAccess::getScriptObject`).
+The placement's **model id** can name a live character instead of a model:
+2000-2008 party members, **2010 the player the pad moves**, 3000 a map part,
+3001 an event item, 4000 / **4001 the camera**, 5000 an effect. DQ7 writes
+its cutscene moves of the player in a model-2010 object (891 of them),
+which object 0 sets up with `OBJECT_TOGGLE` (e.g. `c01nb2a` group 4).
+The placement's +0x00 (actor / name id) is something else: ordinary
+townspeople use 2000-2012 there too.
+
+| low16 | class | params | meaning |
+| --- | --- | --- | --- |
+| `0x06` | `CmdSystemWait` | `[frames]` | wait |
+| `0x17` | `CmdObjectWait` | `[frames]` | this object waits |
+| `0x11` | `CmdFadein` | `[mode, ?, frames]` | mode 0 fade in, 1 fade out (2 / 3: the same with another flag) |
+| `0x18` | `cmdSetObjectDirection` | `[type]` | 0 → 0°, 1 → 270°, 2 → 180°, 3 → 90° (`ScriptTypesUtility::typeToDirection`; 5 → 225°, 7 → 45°) |
+| `0x1c` | `CmdSetCameraAngle` | `[axis, degrees, frames, at once, relative]` | on the camera; axis 0 x / 1 y / 2 z. DQ7 resets the view with `[1, 180, 0, 1, 0]` (490 times) |
+| `0x20` | `CmdMapChangeExit` | `[floor, exit, sound]` | go to the floor, arriving at its exit polygon (`MapLinkManager::search(floor, exit)`) |
+| `0x52` | `cmdIsObjectDirection` | `[degrees, tolerance]` | condition: this object faces within the tolerance |
+| `0x7e` | `CmdSetSurfaceOnOff` | `[exit, on, on]` | enables / disables the exit polygons with that number (runtime flag 0x1000) |
+| `0x87` | `CmdChangeMapLink` | `[floor, exit A, exit B]` | redirects a map link (same order as DQ4's `cmd_change_map_link`) |
+| `0xa3` | `CmdObjectMoveStart` | `[1]` | starts a walk of this object |
+| `0xa5` | `CmdObjectMovePoint` | `[x, y, z (f32), ?, ?]` | a point of the walk |
+| `0xa9` | `CmdSetObjectMoveSpeed` | `[index]` | 0..13 = 0.025..0.4 units/frame (3 = 0.1, what DQ7's walks use) |
+| `0xa4` | `CmdObjectMoveEnd` | `[0]` | walks the points and waits for the arrival |
+
+On arrival the player faces the exit polygon's normal (`DQMapManager::setupExitInfo`: `atan2(n.x, n.z)`).

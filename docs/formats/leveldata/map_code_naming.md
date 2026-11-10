@@ -47,13 +47,20 @@ directly.
 ## Floor ID ⇔ map code correspondence table (`dq7_floor_list.dat`)
 
 Contains a direct "floor ID → map code name" correspondence table.
-16-byte records (the table starts at 0x20):
+A 20-byte header (+0x04 record count, +0x08 record size 16), then 16-byte
+records from offset 0x14 (`LevelDataUtility::getMapIdToMapName` /
+`getMapIdToAreaNo`, `ExcelBinaryData::getRecordDynamic`):
 
 ```
-+0x04 (u16): floor ID
-+0x06 (u16): series group number
-+0x08 (char[8]): map code name (e.g. c01nout, m01nm2f2, wld_n25a)
++0x00 (u16): floor ID
++0x02 (u16): area number (shops, inns and churches are looked up by it)
++0x04 (char[12]): map code name (e.g. c01nout, m01nm2f2, wld_n25a)
 ```
+
+**[Corrected 2026-11-10]** This was described as "records from 0x20, floor ID
+at +0x04, group at +0x06, an 8-character name at +0x08". That reads the same
+fields of the next record (every field shifted by 16 bytes, so the values
+looked right) and cuts names longer than 8 characters.
 
 This floor ID matches argument 0 of the SCRIPT map-move opcode
 `0x0001001f`.
