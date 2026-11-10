@@ -459,6 +459,7 @@ _EVENT_COMMANDS = {
     0x52: ('IF_DIRECTION', 2, 'ff', 'cmdIsObjectDirection [degrees, tolerance] (both f32): true when this object faces within tolerance'),
     0x7e: ('SURFACE_ON_OFF', 2, 'iii', 'CmdSetSurfaceOnOff [exit, on, on]: enables / disables the exit polygons with that number'),
     0x87: ('CHANGE_MAP_LINK', 3, 'iii', 'CmdChangeMapLink [floor, exit A, exit B]: redirects a map link (the same order as DQ4 cmd_change_map_link)'),
+    0x9a: ('NARRATION', 2, 'ii', 'CmdNarrationMessage [message, count]: a narration shown over a faded-out screen (text "#9999", ⑭ ... ⑮)'),
     0xa3: ('MOVE_START', 1, 'i', 'CmdObjectMoveStart [1]: start a walk of this object'),
     0xa4: ('MOVE_END', 1, 'i', 'CmdObjectMoveEnd [0]: walk the points given and wait for the arrival'),
     0xa5: ('MOVE_POINT', 3, 'fffii', 'CmdObjectMovePoint [x, y, z, ?, ?]: a point of the walk'),

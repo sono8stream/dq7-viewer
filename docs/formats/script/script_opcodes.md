@@ -324,6 +324,7 @@ townspeople use 2000-2012 there too.
 | `0x52` | `cmdIsObjectDirection` | `[degrees, tolerance]` (both f32, e.g. `t02nf4` `[0.0, 1.0]`) | condition: this object faces within the tolerance |
 | `0x7e` | `CmdSetSurfaceOnOff` | `[exit, on, on]` | enables / disables the exit polygons with that number (runtime flag 0x1000) |
 | `0x87` | `CmdChangeMapLink` | `[floor, exit A, exit B]` | redirects a map link (same order as DQ4's `cmd_change_map_link`) |
+| `0x9a` | `CmdNarrationMessage` | `[message, count]` | a narration over a faded-out screen (e.g. `c01nf3a` group 5 after `0x11`); text `#9999`, `⑭` first, `⑮` last, no indent. A normal message window is drawn under the fade |
 | `0xa3` | `CmdObjectMoveStart` | `[1]` | starts a walk of this object |
 | `0xa5` | `CmdObjectMovePoint` | `[x, y, z (f32), ?, ?]` | a point of the walk |
 | `0xa9` | `CmdSetObjectMoveSpeed` | `[index]` | 0..13 = 0.025..0.4 units/frame (3 = 0.1, what DQ7's walks use) |

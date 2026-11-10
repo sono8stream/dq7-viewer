@@ -281,6 +281,7 @@ NPCを実際にゲームで動かして確認）の結果、正しくは次の�
 | `0x52` | `cmdIsObjectDirection` | `[角度, 許容]`（どちらもf32。例: `t02nf4` `[0.0, 1.0]`） | 条件: このオブジェクトの向きが許容内 |
 | `0x7e` | `CmdSetSurfaceOnOff` | `[出口, on, on]` | その番号の出口の多角形を有効/無効にする（実行時の0x1000） |
 | `0x87` | `CmdChangeMapLink` | `[フロア, 出口A, 出口B]` | マップのつながりを差し替える（DQ4の`cmd_change_map_link`と同じ並び） |
+| `0x9a` | `CmdNarrationMessage` | `[メッセージ, 件数]` | 暗転中の語り（例: `c01nf3a` group 5、`0x11`の後）。文面は`#9999`、先頭`⑭`・末尾`⑮`、字下げなし。普通のメッセージ窓は暗転の下に隠れる |
 | `0xa3` | `CmdObjectMoveStart` | `[1]` | このオブジェクトの歩きを始める |
 | `0xa5` | `CmdObjectMovePoint` | `[x, y, z (f32), ?, ?]` | 歩く点 |
 | `0xa9` | `CmdSetObjectMoveSpeed` | `[番号]` | 0〜13＝0.025〜0.4単位/フレーム（3＝0.1。DQ7の歩きはこれ） |
