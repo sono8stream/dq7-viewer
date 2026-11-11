@@ -1228,11 +1228,22 @@ def parse_player_stats() -> dict:
             if i == 0 and not any(r):
                 continue
             u = lambda o: struct.unpack_from('<H', r, o)[0]
+            # actions learnt on reaching this level (HaveAction::levelup): 4 battle from +0x14, 4 field
+            # from +0x1e (+0x10 / +0x1a from the record start the game uses, file + 0x14 + 40 x level)
+            anames = _load_name_csv('ACTION_NAME.txt')
+            learn = []
+            for o in (0x14, 0x1e):
+                for k in range(4):
+                    a = u(o + 2 * k)
+                    nm = anames.get(a, f'#{a}').replace(';', '') if a else ''
+                    if a and nm not in learn:
+                        learn.append(nm)
             levels.append({
                 'level': i,
                 'exp': struct.unpack_from('<I', r, 4)[0],
                 'str': u(0x08), 'agi': u(0x0a), 'luck': u(0x0c),
                 'wis': u(0x0e), 'hp': u(0x10), 'mp': u(0x12),
+                'learn': ' / '.join(learn),
                 'tag': tag,
                 'raw_hex': r.hex(),
             })

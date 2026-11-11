@@ -21,7 +21,7 @@ DQ7I18N.extend({
     'character.noModel': '(モデル名なし)',
     'character.colLevel': 'Lv', 'character.colExp': '累計EXP', 'character.colStr': 'ちから',
     'character.colAgi': 'すばやさ', 'character.colLuck': 'うんのよさ', 'character.colWis': 'かしこさ',
-    'character.colHp': 'HP', 'character.colMp': 'MP',
+    'character.colHp': 'HP', 'character.colMp': 'MP', 'character.colLearn': '覚える技',
     'character.recordCountSuffix': 'レコード x',
     'character.statOrderLabel': 'スタッツ並び',
     'character.cat0x08': '0x08 主人公(id1)', 'character.cat0x10': '0x10 本編プレイアブル(id2〜5)',
@@ -71,7 +71,7 @@ DQ7I18N.extend({
     'character.noModel': '(no model name)',
     'character.colLevel': 'Lv', 'character.colExp': 'Total EXP', 'character.colStr': 'STR',
     'character.colAgi': 'AGI', 'character.colLuck': 'LUCK', 'character.colWis': 'WIS',
-    'character.colHp': 'HP', 'character.colMp': 'MP',
+    'character.colHp': 'HP', 'character.colMp': 'MP', 'character.colLearn': 'Learns',
     'character.recordCountSuffix': 'records x',
     'character.statOrderLabel': 'Stat order',
     'character.cat0x08': '0x08 Hero (id1)', 'character.cat0x10': '0x10 main playable (id2-5)',
@@ -228,6 +228,7 @@ function growthCols() {
     ['str', DQ7I18N.t('character.colStr')], ['agi', DQ7I18N.t('character.colAgi')],
     ['luck', DQ7I18N.t('character.colLuck')], ['wis', DQ7I18N.t('character.colWis')],
     ['hp', DQ7I18N.t('character.colHp')], ['mp', DQ7I18N.t('character.colMp')],
+    ['learn', DQ7I18N.t('character.colLearn')],
   ];
 }
 

@@ -25,8 +25,17 @@ playable characters, guests, and NPCs.
 +0x0e  u16  WIS-equivalent stat
 +0x10  u16  max HP
 +0x12  u16  max MP
-+0x14〜0x27  unused (zero padding)
++0x14〜0x27  unused (zero padding)  ← corrected below: actions learnt at this level
 ```
+
+**Correction (actions learnt by level).** The bytes after MP are not padding. Counting from the record
+start that the game uses (file + 0x14 + 40 × level; the offsets in the block above are 4 more), the record
+is: `+0x00` u32 EXP, `+0x04`..`+0x0e` six u16 (STR, AGI, LUCK, WIS, max HP, max MP), **`+0x10` u16 × 4
+battle actions** and **`+0x1a` u16 × 4 field actions** learnt on reaching that level (0 = none; numbers as
+in `TEXT/ACTION_NAME.txt`). `HaveAction::levelup` adds each non-zero pair; `HaveStatus::getLevelupAction`
+collects them for levels 1-99. Example: Maribel (`dq7_player_level2.dat`) learns Frizz (メラ) at level 3 and
+Sap (ルカニ) at 4; Heal (ホイミ) appears in both lists. `HaveStatus::getLevelupData` picks the file by
+character ID 1-6 (any other ID gets file 1).
 
 - No value equivalent to defense is stored (this title derives defense via
   a different formula).
@@ -62,6 +71,10 @@ playable characters, guests, and NPCs.
 +0x94〜0xa8  unused (all zero)
 ```
 
+- Further fields (same offset convention as the block above, i.e. 4 more than from the record start the
+  game uses): `+0x3e` u16 = initial max MP (Aira, level 21: 71, as her growth table), **`+0x42`..`+0x4a`
+  u16 × 5 = initial equipment** (weapon, armour, shield, helmet, accessory; Aira 17 / 92 / 158 / 188 / 205,
+  Maribel - / 88 / - / - / 202, item IDs as `TEXT/ITEM_NAME.txt`).
 - `+0x32`/`+0x34`/`+0x36`/`+0x38`/`+0x3c` (STR/AGI/LUCK/WIS/HP) have been
   confirmed, via real-data comparison, to **completely match, field for
   field**, the level-1 record of `dq7_player_levelN.dat` for the 4
