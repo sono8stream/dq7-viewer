@@ -111,27 +111,75 @@ LEVELDATA/dq7_floor_param.dat (同インデックスで int32×3 を保持、12b
 ### マップ→レコードの対応
 
 ```
-部屋コード文字列 (例: d07pf3)
-     │  dq7_encount_tile.dat で検索
+フロアID (例: 1720 = d07pf3)
+     │  dq7_encount_tile.dat (+0x00) で検索
      ▼
-ゾーンID Z (dq7_encount_tile.dat +0x08/+0x09/+0x0a の3スロットのいずれか)
-     │  Z → 2Z, 2Z+1
++0x04 / +0x05 / +0x06 のバイト(物語の段階別。下記) = レコード番号そのもの
      ▼
-dq7_encount_data.dat レコード #2Z, #2Z+1
+dq7_encount_data.dat レコード #n
 ```
 
-ゾーンIDが指す2レコード`(2Z, 2Z+1)`は、同一マップ内の異なるエリア(例: 南側/北側)で
-使い分けられる。マップ内のどのエリアがどちらのレコードを使うかの対応表の所在は
-未確定(マップパック内のタイル属性レイヤーにあると推測)。
+(訂正: この文書の以前の版は、このバイトを「ゾーンID Z」と読み、1つのマップの南側/北側で
+レコード`2Z`/`2Z+1`を使い分けると書いていた。これは誤り。`EncountTile::getTileId`が
+バイトを返し、`Encount::setupDungeon`/`EncountData::setup`はそれをそのままレコード番号として
+使う。「聖風の谷の南と北」とされた#76/#77は別々のマップのもので、`wld_p17a`/`wld_p17b`が76、
+`wld_p17c`が77を使う。1つのマップが使うレコードは物語の段階ごとに1つ。)
+
+マップに入ると`TownTriggerTaskSystem::initialize`がフロアのレコードを読む。0でなければ、
+その値を`SymbolEncountStatus+0x750`(`registEncountData`がすべての戦闘に渡すレコード)に入れ、
+エンカウントのタスク(`TaskEnemyEncount`)を始める。0ならそのフロアにエンカウントは無い。
 
 ### `dq7_encount_tile.dat`(747レコード×28byte)
 
+行はファイル先頭0x14から(20byteヘッダ)。
+
 | off | 内容 |
 |---|---|
-| +0x03 | ほぼ全件0xFF |
-| +0x04 | u16 部屋固有ID(値域0-5270。`dq7_encount_data.dat`のインデックスとは別の値域で、間に上記のゾーンID変換が入る) |
-| +0x08 / +0x09 / +0x0a | 各1byteの「エンカウントゾーンID」枠が3つ。1部屋が条件別(地形/昼夜等)に最大3つの別ゾーンIDを持てる。値域0-151 |
-| +0x0b〜 | 部屋コード文字列(ASCII、NUL終端)。例: `d07pf3`=ダンジョン07・過去(`p`)・3階相当 |
+| +0x00 | u32 フロアID(`dq7_floor_list.dat`) |
+| +0x04 | u8 type0フラグ1740が立っていない間のレコード |
+| +0x05 | u8 フラグ1740が立った後(フラグ2000が立っていない間)のレコード |
+| +0x06 | u8 フラグ2000が立った後のレコード |
+| +0x07〜 | 部屋コード文字列(ASCII、NUL終端)。例: `d07pf3`=ダンジョン07・過去(`p`)・3階。行の最後のバイトは0xFF |
+
+(訂正: 以前の表は16byteヘッダとして数えていたため、全オフセットが4大きかった。
+「+0x04 u16 部屋固有ID」はフロアIDの下位16bit、「+0x08/+0x09/+0x0a」は上の+0x04/+0x05/+0x06。)
+
+### `dq7_encount_tile_sea_chapter4.dat` / `dq7_encount_tile_sea.dat`(16行×32byte)
+
+16行(ブロックz)×16個のu16レコード番号(ブロックx)。全体マップ(`wld_n25a`、フロア5161)で
+船に乗っている間、`TaskEnemyEncount::execute`が両軸とも`clamp(int((pos + 160) * 16 / 320), 0, 15)`
+でブロックを求める。`EncountTile::setupField`はそのブロックの値を
+`dq7_encount_tile_sea_chapter4.dat`から読む。海のエンカウントは歩数によるランダム
+エンカウント(シンボル無し)。
+
+`dq7_encount_tile_sea.dat`も同じ形で、起動時に読み込まれる(`DQ7EncountTileSea::setup`)が、
+読むコードは無い。
+
+### ランダム(歩数)エンカウント
+
+`TaskEnemyEncount::execute`には、歩数を数え(`Encount::execWalk`)、シンボルを出さずに
+直接戦闘を始める(`SymbolEncountStatus::registEncountData`)枝がある。この枝を通るのは、
+全体マップの海の上、フロア3538/3541(`x09nin3f1a`/`x09nin3f1c`)、地域122
+(`d24nin1`〜`d24nin4`)。ほかのフロアはシンボルを使う。シンボルの位置は
+COLLの`CELL`格子で決まる(`SymbolEncountStatus::calcEncountPos`とその周りの関数)。
+
+### `dq7_world_atlas_offset_large.dat`(40byte行) — 下画面の拡大地図
+
+| off | 内容 |
+|---|---|
+| +0x00 | u32 フロアID |
+| +0x04 | u32 type0フラグ: このフラグが立っていない間、この行を使う(0=常に) |
+| +0x08 / +0x0c | s32 画像の左上の位置(「拡大地図の画素」でのx/y) |
+| +0x10 | 画像名(24byte): `/SCREENTEX/atlas/world_l/<名前>.fpt.lz` |
+
+`WorldAtlasLarge::canOpen`/`load`は、今のフロアの行のうちフラグが立っていない最初の行を使う。
+ただし画像が存在する場合に限る。画像は64×64のRGBA8タイル`texNNN.dmp`と`size.dat`を
+まとめた`.fpt.lz`(FPT0)。画像上のプレイヤーの画素
+(`WorldAtlasLarge::convertFloorPosToAtlasPos`)は
+`int((V * 10 + 1600) * 0.6496875) - (+0x08, +0x0c)`。Vは
+`WorldAtlasStatus::convertWalkPosToVehiclePos`が求める全体マップ上の位置で、フロアの
+`dq7_world_atlas_offset.dat`の行を使って`(+0x10 + x * +0x18, -+0x14 + z * +0x18)`となる。
+画像は320×240の下画面に1:1で描かれ、プレイヤーが中央に来るようにスクロールする。
 
 ### `dq7_field_symbol.dat`(159レコード×20byte) — 世界地図専用の徘徊シンボル表
 
@@ -140,7 +188,7 @@ dq7_encount_data.dat レコード #2Z, #2Z+1
 +0x01-03  FF FF FF
 +0x04 f32 X (世界地図座標)
 +0x08 f32 Y (世界地図座標)
-+0x0c u16 mapId (dq7_encount_tile.dat / dq7_floor_list.dat の+0x04値と一致。例外なく世界地図`wld_*`系の行)
++0x0c u16 mapId (フロアID: dq7_encount_tile.dat +0x00 / dq7_floor_list.dat と一致。例外なく世界地図`wld_*`系の行)
 +0x0e u16 symId (シンボル個体の一意ID。隣接サブ領域をまたぐ個体のみ同じ値を共有)
 +0x10 u32 (ほぼ常に0)
 ```

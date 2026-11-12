@@ -123,29 +123,83 @@ Monster Park, etc.).
 ### Map → record mapping
 
 ```
-room code string (e.g. d07pf3)
-     │  looked up in dq7_encount_tile.dat
+floor id (e.g. 1720 = d07pf3)
+     │  looked up in dq7_encount_tile.dat (+0x00)
      ▼
-zone ID Z (one of the 3 slots at dq7_encount_tile.dat +0x08/+0x09/+0x0a)
-     │  Z → 2Z, 2Z+1
+byte +0x04 / +0x05 / +0x06 (by story stage, see below) = the record number itself
      ▼
-dq7_encount_data.dat records #2Z, #2Z+1
+dq7_encount_data.dat record #n
 ```
 
-The two records `(2Z, 2Z+1)` pointed to by a zone ID are used separately
-for different areas within the same map (e.g. south side/north side). The
-location of the table mapping which area of a map uses which record is
-unconfirmed (presumed to be in a tile-attribute layer inside the map
-pack).
+(Correction: an earlier version of this document read the bytes as a "zone
+ID Z" pointing at records `2Z` and `2Z+1` used for the south / north of one
+map. That was wrong. `EncountTile::getTileId` returns the byte and
+`Encount::setupDungeon` / `EncountData::setup` use it as the record number
+directly. The two records once taken for "the south and north of 聖風の谷"
+(#76 / #77) belong to two different maps: `wld_p17a`/`wld_p17b` use 76 and
+`wld_p17c` uses 77. One map has one record per story stage.)
+
+`TownTriggerTaskSystem::initialize` reads the floor's record when a map is
+entered. If it is not 0, the record goes into `SymbolEncountStatus+0x750`
+(the record `registEncountData` gives every battle) and the encounter task
+(`TaskEnemyEncount`) starts. If it is 0, the floor has no encounters.
 
 ### `dq7_encount_tile.dat` (747 records × 28 bytes)
 
+Rows from file offset 0x14 (20-byte header).
+
 | off | content |
 |---|---|
-| +0x03 | 0xFF for almost all records |
-| +0x04 | u16 room-unique ID (range 0-5270. A separate value space from the `dq7_encount_data.dat` index; the zone-ID conversion above sits between them) |
-| +0x08 / +0x09 / +0x0a | three 1-byte "encounter zone ID" slots. A single room can have up to 3 different zone IDs depending on condition (terrain/time of day, etc.). Range 0-151 |
-| +0x0b〜 | room code string (ASCII, NUL-terminated). Example: `d07pf3` = dungeon 07, past (`p`), equivalent to floor 3 |
+| +0x00 | u32 floor id (`dq7_floor_list.dat`) |
+| +0x04 | u8 record used while type-0 flag 1740 is clear |
+| +0x05 | u8 record used once flag 1740 is set (and flag 2000 is clear) |
+| +0x06 | u8 record used once flag 2000 is set |
+| +0x07〜 | room code string (ASCII, NUL-terminated). Example: `d07pf3` = dungeon 07, past (`p`), floor 3. The row's last byte is 0xFF |
+
+(Correction: the earlier table counted a 16-byte header, so every offset
+was 4 too large: "+0x04 u16 room id" was the low half of the floor id, and
+"+0x08/+0x09/+0x0a" are the bytes at +0x04/+0x05/+0x06 above.)
+
+### `dq7_encount_tile_sea_chapter4.dat` / `dq7_encount_tile_sea.dat` (16 rows × 32 bytes)
+
+16 rows (block z) of 16 u16 record numbers (block x). On the world map
+(`wld_n25a`, floor 5161), while the party is aboard the ship,
+`TaskEnemyEncount::execute` takes the block `clamp(int((pos + 160) * 16 /
+320), 0, 15)` on both axes. `EncountTile::setupField` reads
+`dq7_encount_tile_sea_chapter4.dat` for that block. Encounters at sea are
+random (counted by steps, with no symbols).
+
+`dq7_encount_tile_sea.dat` has the same shape and is loaded at start-up
+(`DQ7EncountTileSea::setup`), but no code reads it.
+
+### Random (walk-count) encounters
+
+`TaskEnemyEncount::execute` has a branch that counts steps
+(`Encount::execWalk`) and starts the battle directly
+(`SymbolEncountStatus::registEncountData`), with no symbols. It runs on the
+world map at sea, on floors 3538 / 3541 (`x09nin3f1a` / `x09nin3f1c`) and
+in area 122 (`d24nin1`-`d24nin4`). All other floors use symbols. The symbols
+are placed with the COLL `CELL` grid (`SymbolEncountStatus::calcEncountPos`
+and the functions around it).
+
+### `dq7_world_atlas_offset_large.dat` (40-byte rows) — the zoomed lower-screen map
+
+| off | content |
+|---|---|
+| +0x00 | u32 floor id |
+| +0x04 | u32 type-0 flag: the row is used while the flag is clear (0 = always) |
+| +0x08 / +0x0c | s32 x / y of the picture's top-left in "large-atlas pixels" |
+| +0x10 | picture name (24 bytes): `/SCREENTEX/atlas/world_l/<name>.fpt.lz` |
+
+`WorldAtlasLarge::canOpen` / `load` take the first row of the current floor
+whose flag is clear, but only if the picture exists. The picture is an
+`.fpt.lz` FPT0 of 64 × 64 RGBA8 `texNNN.dmp` tiles plus `size.dat`. The
+player's pixel on it (`WorldAtlasLarge::convertFloorPosToAtlasPos`) is
+`int((V * 10 + 1600) * 0.6496875) - (+0x08, +0x0c)`. V is the world-map
+position that `WorldAtlasStatus::convertWalkPosToVehiclePos` gives, using
+the floor's row of `dq7_world_atlas_offset.dat`: `(+0x10 + x * +0x18,
+-+0x14 + z * +0x18)`. The picture is drawn 1:1 on the 320 × 240 lower
+screen and scrolled to keep the player in the middle.
 
 ### `dq7_field_symbol.dat` (159 records × 20 bytes) — world-map-only roaming symbol table
 
@@ -154,7 +208,7 @@ pack).
 +0x01-03  FF FF FF
 +0x04 f32 X (world map coordinate)
 +0x08 f32 Y (world map coordinate)
-+0x0c u16 mapId (matches the +0x04 value of dq7_encount_tile.dat / dq7_floor_list.dat; without exception, rows for the world map `wld_*`)
++0x0c u16 mapId (the floor id: dq7_encount_tile.dat +0x00 / dq7_floor_list.dat; without exception, rows for the world map `wld_*`)
 +0x0e u16 symId (unique ID per symbol instance; shared across adjacent sub-regions only for the same individual)
 +0x10 u32 (almost always 0)
 ```

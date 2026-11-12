@@ -6,7 +6,7 @@
 DQ7I18N.extend({
   ja: {
     'encount.tabList': 'レコード一覧',
-    'encount.searchPlaceholder': '番号 / モンスター名 / マップコード / zone で絞り込み...',
+    'encount.searchPlaceholder': '番号 / モンスター名 / マップコード で絞り込み...',
     'encount.selectPrompt': 'レコードを選択すると 56byte の全フィールドが表示されます',
     'encount.loadFailed': '読み込み失敗',
     'encount.noMatch': '該当なし',
@@ -17,7 +17,7 @@ DQ7I18N.extend({
     'encount.colMonster': 'モンスター',
     'encount.colWeight': '重み',
     'encount.recordLabel': 'レコード',
-    'encount.zoneUsers': 'このゾーンを使う部屋コード',
+    'encount.zoneUsers': 'この記録を使う部屋コード（[n]=物語の段階、sea(x,z)=全体マップの海のブロック）',
     'encount.noMatchingTile': '(encount_tile に該当なし)',
     'encount.specialNote': '※ arrayA に 991–999 の特殊コード。石版/すれちがい/モンスターパーク等の差し込み枠',
     'encount.arrayARoster': 'arrayA (+0x02) = ロスター',
@@ -41,7 +41,7 @@ DQ7I18N.extend({
   },
   en: {
     'encount.tabList': 'Records',
-    'encount.searchPlaceholder': 'Filter by number / monster name / map code / zone...',
+    'encount.searchPlaceholder': 'Filter by number / monster name / map code...',
     'encount.selectPrompt': 'Select a record to see all 56 bytes of fields',
     'encount.loadFailed': 'Load failed',
     'encount.noMatch': 'No matches',
@@ -52,7 +52,7 @@ DQ7I18N.extend({
     'encount.colMonster': 'monster',
     'encount.colWeight': 'weight',
     'encount.recordLabel': 'Record',
-    'encount.zoneUsers': 'Room codes using this zone',
+    'encount.zoneUsers': 'Room codes using this record ([n] = story stage, sea(x,z) = world-map sea block)',
     'encount.noMatchingTile': '(no match in encount_tile)',
     'encount.specialNote': '* arrayA contains special codes 991-999: slots for tablets/StreetPass/Monster Park etc.',
     'encount.arrayARoster': 'arrayA (+0x02) = roster',
@@ -128,11 +128,11 @@ function renderSub(data) {
   if (DQ7I18N.getLang() === 'en') {
     subEl.textContent =
       `${data.source} — ${data.record_count} records x ${data.record_size} bytes. ` +
-      `zone = index//2 / region = index%2. Click a row for details.`;
+      `The record number is the byte of dq7_encount_tile.dat. Click a row for details.`;
   } else {
     subEl.textContent =
       `${data.source} — ${data.record_count} レコード x ${data.record_size}byte。` +
-      `zone = index//2 / region = index%2。行クリックで詳細。`;
+      `記録番号は dq7_encount_tile.dat の値そのもの。行クリックで詳細。`;
   }
 }
 
@@ -148,7 +148,6 @@ function renderList() {
   const rows = allRecs.filter(r => {
     if (!q) return true;
     if (String(r.index) === q || String(r.index).includes(q)) return true;
-    if (('zone ' + r.zone).includes(q) || String(r.zone) === q) return true;
     if (r.maps.some(m => m.toLowerCase().includes(q))) return true;
     const all = [...r.arrayA, ...r.arrayB, r.extra_rare];
     return all.some(m => m.name && m.name.toLowerCase().includes(q));
@@ -159,7 +158,7 @@ function renderList() {
       (r.is_empty && !r.is_special ? `<span class="badge em">${esc(DQ7I18N.t('encount.badgeAEmpty'))}</span>` : '');
     return `<div class="enc-row${r.index === selectedIdx ? ' selected' : ''}" data-idx="${r.index}">
       <span class="eid">#${r.index}</span>
-      <span class="ezone">z${r.zone}/r${r.region}</span>
+      <span class="ezone">${esc((r.maps[0] || '').slice(0, 10))}</span>
       <span class="emons">${esc(monSummary(r))}</span>
       ${badges}
     </div>`;
@@ -197,7 +196,7 @@ function renderDetail(idx) {
   const midv = r.mid.join(', ');
 
   let h = '';
-  h += `<div class="sec">${t('encount.recordLabel')} #${r.index}  (zone ${r.zone} / region ${r.region})</div>`;
+  h += `<div class="sec">${t('encount.recordLabel')} #${r.index}</div>`;
   h += `<div>${t('encount.zoneUsers')}: ${r.maps.length ? esc(r.maps.join(', ')) : t('encount.noMatchingTile')}</div>`;
   if (r.is_special) h += `<div style="color:#a5642b">${t('encount.specialNote')}</div>`;
 

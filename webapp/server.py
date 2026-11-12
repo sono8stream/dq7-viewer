@@ -772,8 +772,14 @@ _encount_tile_zone_cache = None
 
 
 def _encount_tile_zone_map() -> dict:
-    """{zone_id: [room_code, ...]} — dq7_encount_tile.dat の +0x08/09/0a のゾーンIDから
-    その行の部屋コード(+0x0b〜)を逆引き。encount_data レコード i は zone = i//2。"""
+    """{record: [room_code, ...]} - who uses each dq7_encount_data.dat record.
+
+    dq7_encount_tile.dat (28-byte rows from 0x14): +0x00 u32 floor id, +0x04 / +0x05 / +0x06 the
+    record used before flag 1740 / after it / after flag 2000 (EncountTile::getTileId), +0x07 the
+    room code. The byte IS the record number (an older reading took records 2Z / 2Z+1 for a byte Z).
+    A code is listed with the stages using it when not all three do, e.g. "wld_n05a[2]".
+    LEVELDATA/dq7_encount_tile_sea_chapter4.dat (16 rows x 16 u16: the world map's 16 x 16 blocks,
+    EncountTile::setupField) adds "sea(x,z)" users."""
     global _encount_tile_zone_cache
     if _encount_tile_zone_cache is not None:
         return _encount_tile_zone_cache
@@ -786,15 +792,28 @@ def _encount_tile_zone_map() -> dict:
         _encount_tile_zone_cache = out
         return out
     for i in range(nrec):
-        r = data[16 + i * rsize:16 + (i + 1) * rsize]
-        if len(r) < 12:
+        r = data[0x14 + i * rsize:0x14 + (i + 1) * rsize]
+        if len(r) < 8:
             continue
-        code = bytes(b for b in r[11:] if 32 <= b < 127).decode('latin1', 'replace')
-        for z in (r[8], r[9], r[10]):
+        code = r[7:].split(b'\0')[0].decode('latin1', 'replace')
+        stages = {}
+        for k, z in enumerate(r[4:7]):
             if z:
-                out.setdefault(z, [])
-                if code and code not in out[z]:
-                    out[z].append(code)
+                stages.setdefault(z, []).append(k)
+        for z, ks in stages.items():
+            label = code if len(ks) == 3 else f"{code}[{','.join(map(str, ks))}]"
+            out.setdefault(z, [])
+            if label not in out[z]:
+                out[z].append(label)
+    try:
+        sea = open(os.path.join(_LEVELDATA_DIR, 'dq7_encount_tile_sea_chapter4.dat'), 'rb').read()
+        for z in range(16):
+            for x in range(16):
+                rec = struct.unpack_from('<H', sea, 0x14 + z * 32 + x * 2)[0]
+                if rec:
+                    out.setdefault(rec, []).append(f'sea({x},{z})')
+    except (OSError, struct.error):
+        pass
     _encount_tile_zone_cache = out
     return out
 
@@ -852,13 +871,9 @@ def parse_encount_data() -> dict:
         mid = list(r[0x1c:0x24])
         is_empty = not any(A)
         is_special = any(991 <= m <= 999 for m in A)
-        zone = i // 2
-        region = i % 2
         records.append({
             'index': i,
-            'zone': zone,
-            'region': region,   # 0/1 = そのゾーン内の領域 (南/北 等)
-            'maps': zmap.get(zone, []),
+            'maps': zmap.get(i, []),   # dq7_encount_tile.dat rows (and world-map sea blocks) using it
             'arrayA': [{'id': m, 'name': mname(m), 'name_en': mname_en(m)} for m in A],
             'arrayB': [{'id': m, 'name': mname(m), 'name_en': mname_en(m)} for m in B],
             'extra_rare': {'id': x18, 'name': mname(x18), 'name_en': mname_en(x18)},   # +0x18 レア客枠
