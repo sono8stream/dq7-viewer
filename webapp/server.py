@@ -734,7 +734,70 @@ def floor_detail(floor_id: int) -> dict:
         'script_file': script_file,
         'warps_in': widx['by_dst'].get(floor_id, []),
         'warps_out': widx['by_file'].get(script_file, []) if script_file else [],
+        'party_talk': party_talk_for_floor(floor_id),
     }
+
+
+# --- party talk (dq7_partytalk_chapter*.dat + _index.dat) ---------------------
+# Format: docs/formats/leveldata/partytalk_format.md (PartyTalk::setPartyTalkData / checkCondition /
+# setPickMessage / setMessageData / getPartyTalk).
+
+_PARTYTALK_TABLES = ('chapter1', 'chapter2', 'chapter3', 'chapter4', 'chapter_ending')
+# +0x1e high nibble: the "just now" condition on +0x00 (getPartyTalk prefers these records)
+# (1 PartyTalkData::isPreMessageNo, 2 +0x190 setPreItem, 3 +0x192 setUseItem, 4 the +0x194 list of setAddPlayer,
+# 5 +0x18c set by TaskSearch; 6 / 8 / 9 / 10 need a byte to be non-zero and do not read +0x00)
+_PT_PRE = {1: 'heard_line', 2: 'item_got', 3: 'item_used', 4: 'player_added', 5: 'searched',
+           6: 'byte_0xed', 8: 'byte_0xf0', 9: 'arrived', 10: 'arrived'}
+# +0x1f low / high nibbles: checkCondition(type, +0x04 / +0x08)
+_PT_COND = {1: 'flag0_on', 2: 'flag0_off', 3: 'flag1_on', 4: 'flag1_off', 5: 'flag2_on', 6: 'flag2_off',
+            7: 'item_not_held', 8: 'item_held', 9: 'alive', 10: 'dead', 11: 'init_index_0', 12: 'exit'}
+# +0x20 low nibble: what happens on picking (setPartyTalkMessage / setPickMessage)
+_PT_PICK = {1: 'set_flag0', 2: 'clear_flag0', 3: 'set_flag1', 4: 'clear_flag1', 5: 'set_flag2',
+            6: 'clear_flag2', 7: 'yes_no', 8: 'extra_if_flag0', 9: 'extra_if_not_flag0',
+            10: 'extra_if_item_held', 11: 'extra_if_item_not_held', 12: 'extra_if_alive', 13: 'mode5'}
+
+
+def _pt_table(name: str):
+    path = os.path.join(_LEVELDATA_DIR, f'dq7_partytalk_{name}.dat')
+    data = open(path, 'rb').read()
+    n, rs = struct.unpack_from('<II', data, 4)
+    return data, n, rs
+
+
+def party_talk_for_floor(floor_id: int) -> list:
+    """Every party talk record of one floor (the index's key is the floor id), decoded."""
+    out = []
+    for name in _PARTYTALK_TABLES:
+        try:
+            idx, ni, irs = _pt_table(name + '_index')
+            data, n, rs = _pt_table(name)
+        except OSError:
+            continue
+        for i in range(ni):
+            key, start, count, _ = struct.unpack_from('<4H', idx, 0x14 + i * irs)
+            if key != floor_id:
+                continue
+            for k in range(start, min(start + count, n)):
+                o = 0x14 + k * rs
+                pre, v1, v2, pv, msg, fs, fe, fl, lines = struct.unpack_from('<IIIIIHHHH', data, o)
+                b1e, b1f, b20 = data[o + 0x1e], data[o + 0x1f], data[o + 0x20]
+                conds = [{'type': _PT_COND.get(c, c), 'value': v} for c, v in ((b1f & 15, v1), (b1f >> 4, v2)) if c]
+                pick = b20 & 15
+                if pick == 7:
+                    shown = lines % 1000 // 100 + lines % 100 // 10 + lines % 10
+                else:
+                    shown = lines % 100 // 10 + lines % 10 if lines % 100 >= 10 else lines % 100
+                out.append({
+                    'table': name, 'record': k, 'speaker': data[o + 0x1d], 'message': msg, 'lines': lines,
+                    'text': [resolve_message(msg + j) for j in range(min(shown, 6))] if msg else [],
+                    'flag_on': fs, 'flag_off': fe,
+                    'just_now': {'type': _PT_PRE.get(b1e >> 4, b1e >> 4), 'value': pre} if b1e >> 4 else None,
+                    'conditions': conds,
+                    'pick': {'type': _PT_PICK.get(pick, pick), 'value': pv} if pick else None,
+                    'disabled': bool(b1e & 1),
+                })
+            break
+    return out
 
 
 # --- エンカウント (dq7_encount_data.dat) ビュア --------------------------------

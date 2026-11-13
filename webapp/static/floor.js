@@ -33,6 +33,15 @@ DQ7I18N.extend({
     'floor.warpsOutUnavailable': '(対応SCRIPTファイルがないため取得不可)',
     'floor.footnote1': '※ MAP_WARP(opcode 0x0001001f) は「有力な仮説・実機未検証」。',
     'floor.footnote2': '  詳細は docs/script_opcode_0x1001f_map_warp.md。',
+    'floor.partyTalkSection': '仲間会話（dq7_partytalk_*.dat、索引のキー＝このフロア）',
+    'floor.ptSpeaker': '話し手',
+    'floor.ptFlags': 'フラグ(種類0) ON/OFF',
+    'floor.ptJustNow': '直前',
+    'floor.ptConds': '条件',
+    'floor.ptPick': '選ばれたとき',
+    'floor.ptLines': '行数欄',
+    'floor.ptDisabled': '無効(+0x1e bit0)',
+    'floor.ptNote': '※ 条件を満たすもののうち聞いた回数が少ないものから、直前条件つきを優先してランダムに選ばれる。形式は docs/formats/leveldata/partytalk_format.ja.md。',
   },
   en: {
     'floor.tabList': 'Floors',
@@ -63,6 +72,15 @@ DQ7I18N.extend({
     'floor.warpsOutUnavailable': '(unavailable — no matching SCRIPT file)',
     'floor.footnote1': '* MAP_WARP (opcode 0x0001001f) is a "strong hypothesis, unverified on real hardware".',
     'floor.footnote2': '  See docs/script_opcode_0x1001f_map_warp.md for details.',
+    'floor.partyTalkSection': 'Party talk (dq7_partytalk_*.dat, index key = this floor)',
+    'floor.ptSpeaker': 'speaker',
+    'floor.ptFlags': 'type-0 flags on/off',
+    'floor.ptJustNow': 'just now',
+    'floor.ptConds': 'conditions',
+    'floor.ptPick': 'on pick',
+    'floor.ptLines': 'lines field',
+    'floor.ptDisabled': 'disabled (+0x1e bit 0)',
+    'floor.ptNote': '* Among the matching records the game takes those heard the fewest times, "just now" ones first, at random. Format: docs/formats/leveldata/partytalk_format.md.',
   },
 });
 
@@ -234,6 +252,24 @@ function renderFloorDetail(d) {
   } else {
     for (const w of d.warps_out) lines.push(warpLine(w));
   }
+  const pt = d.party_talk || [];
+  lines.push('');
+  lines.push(`── ${t('floor.partyTalkSection')} (${pt.length}) ──`);
+  if (!pt.length) lines.push(`  ${t('floor.none')}`);
+  for (const p of pt) {
+    const cond = (c) => `${c.type}=${c.value}`;
+    const head = [`[${p.table} #${p.record}]`, `${t('floor.ptSpeaker')} ${p.speaker}`,
+      `${t('floor.ptFlags')} ${p.flag_on || '-'}/${p.flag_off || '-'}`, `${t('floor.ptLines')} ${p.lines}`];
+    if (p.just_now) head.push(`${t('floor.ptJustNow')} ${cond(p.just_now)}`);
+    if (p.conditions.length) head.push(`${t('floor.ptConds')} ${p.conditions.map(cond).join(', ')}`);
+    if (p.pick) head.push(`${t('floor.ptPick')} ${cond(p.pick)}`);
+    if (p.disabled) head.push(t('floor.ptDisabled'));
+    lines.push('  ' + head.join('  '));
+    for (const m of p.text) {
+      lines.push('     ' + m.replace(/^#\d+\r\n/, '').replace(/\r\n/g, ' ').trim());
+    }
+  }
+  lines.push(t('floor.ptNote'));
   lines.push('');
   lines.push(t('floor.footnote1'));
   lines.push(t('floor.footnote2'));
